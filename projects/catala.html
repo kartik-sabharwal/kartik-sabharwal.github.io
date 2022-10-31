@@ -1,0 +1,848 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="viewport" content="width=320, initial-scale=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>catala.rkt</title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+      font-size: small;
+    }
+    h1, h2, h3 {
+      color: gray;
+    }
+    h1 {
+      border-bottom: 1px solid black;
+    }
+    table {
+      width: 100%;
+    }
+    tr.header {
+      color: white;
+      background: black;
+    }
+    tr.odd {
+      background: lightgray;
+    }
+    td {
+      text-align: center;
+    }
+  </style>
+  <style type="text/css">code{white-space: pre;}</style>
+</head>
+<body>
+<div id="header">
+<h1 class="title">catala.rkt</h1>
+</div>
+<pre><code>#lang racket/base
+
+(require redex)
+
+(provide all-defined-out)
+
+(define-language ScopeLanguage
+  (x  ::= variable-not-otherwise-mentioned)
+  (S  ::= x)
+  (Sₙ ::= (S natural))
+  (l  ::= x
+          (Sₙ x))
+  (τ  ::= bool
+          unit
+          (τ → τ))
+  (e  ::= x
+          true
+          false
+          ()
+          (λ [x : τ] e)
+          (e e)
+          l
+          d)
+  (d  ::= {e ... ¦ e :- e}
+          ⊛
+          ∅)
+  (a  ::= (define l : τ
+            d)
+          (call Sₙ))
+  (σ  ::= (scope S a ...))
+  (P  ::= (σ ...)))
+
+(define-term P1/ScopeLanguage
+  ((scope A 
+     (define x : bool 
+       {¦ true :- true}))))
+
+(define-term P2/ScopeLanguage
+  ((scope A 
+     (define x : bool
+       {¦ true :- true}))
+   (scope B
+     (call (A 1))
+     (define y : bool 
+       {¦ true :- ((A 1) x)}))))
+
+(define-term P3/ScopeLanguage
+  ((scope A 
+     (define x : bool 
+       {¦ true :- true}))
+   (scope B
+     (define ((A 1) x) : bool 
+       {¦ true :- false})
+     (call (A 1))
+     (define y : bool 
+       {¦ true :- ((A 1) x)}))))
+
+(define-extended-language DefaultCalculus ScopeLanguage
+  (e      ::= ....
+              [e : τ]
+              (values e ...)
+              (let-values [(l ...) e] ;; move &quot;values&quot; here
+                e))
+  (σ      ::= ....
+              (define (x e ...)
+                e))
+  (Γ      ::= ·
+              (x : τ Γ))
+  (Δ      ::= ·
+              (l Δ))
+  (v      ::= true
+              false
+              (λ [x : τ] e)
+              ⊛
+              ∅)
+  (Cλ     ::= (hole e)
+              (v hole)
+              {v ... ¦ hole :- e}
+              {v ... ¦ true :- hole})
+  (C      ::= Cλ
+              {v ... hole e ... ¦ e :- e})
+  (Cλ-alt ::= hole
+              (Cλ-alt e)
+              (v Cλ-alt)
+              {v ... ¦ Cλ-alt :- e}
+              {v ... ¦ true :- Cλ-alt})
+  (C-alt  ::= Cλ-alt
+              {v ... C-alt e ... ¦ e :- e}))
+
+(define-term P1/DefaultCalculus
+  ((define (A x)
+     (let-values [(x) (values {(x ()) ¦ true :- {¦ true :- true}})]
+       (values x)))))
+
+(define-term P2/DefaultCalculus
+  ((define (A x)
+     (let-values [(x) (values {(x ()) ¦ true :- {¦ true :- true}})]
+     (values x)))
+   (define (B y)
+     (let-values [(((A 1) x)) (values (λ (u : unit) ∅))]
+     (let-values [(((A 1) x)) (A ((A 1) x))]
+     (let-values [(y) (values {(y ()) ¦ true :- {¦ true :- ((A 1) x)}})]
+     (values y)))))))
+
+(define-term P3/DefaultCalculus
+  ((define (A x)
+     (let-values [(x) (values {(x ()) ¦ true :- {¦ true :- true}})]
+     (values x)))
+   (define (B y)
+     (let-values [(((A 1) x)) (values (λ (u : unit) ∅))]
+     (let-values [(((A 1) x))
+                  (values {(((A 1) x) ()) ¦ true :- {¦ true :- false}})]
+     (let-values [(((A 1) x)) (A (λ (u : unit) ((A 1) x)))]
+     (let-values [(y) (values {(y ()) ¦ true :- {¦ true :- ((A 1) x)}})]
+     (values y))))))))
+
+(define-extended-language EnrichedLambdaCalculus DefaultCalculus
+  (τ ::= ....
+         top
+         (list τ)
+         (option τ))
+  (e ::= ....
+         None
+         (Some e)
+         (match e [e e] ...)
+         (list e ...)
+         (fold-left e e e)
+         (raise ε)
+         (try e [ε e])
+         (if e e e))
+  (ε ::= ∅
+         ⊛))
+
+(define-metafunction DefaultCalculus
+  same : τ τ ... -&gt; boolean
+  [(same τ)                #t]
+  [(same τ τ   τ_rest ...) (same τ τ_rest ...)]
+  [(same τ τ_1 τ_rest ...) #f])
+
+(test-equal
+ (term (same unit))
+ #t)
+
+(test-equal
+ (term (same (bool → bool) (bool → bool) (bool → bool)))
+ #t)
+
+(test-equal
+ (term (same (bool → bool) (bool → unit) (bool → bool)))
+ #f)
+
+(define-metafunction DefaultCalculus
+  different : x x -&gt; boolean
+  [(different x x)       #f]
+  [(different x x_other) #t])
+
+(test-equal (term (different a b)) #t)
+
+(test-equal (term (different a a)) #f)
+
+#| _____Typing rules for the default calculus_____ |#
+
+(define-judgment-form
+  DefaultCalculus
+  #:mode (has-type I I O)
+  #:contract (has-type Γ e τ)
+  [
+   ------------------------ &quot;T-Var&quot;
+   (has-type (x : τ Γ) x τ)]
+
+  [(has-type Γ x τ)
+   (side-condition (different x x_prime))
+   -------------------------------------- &quot;T-Lookup&quot;
+   (has-type (x_prime : τ_prime Γ) x τ)]
+
+  [
+   ---------------------- &quot;T-True&quot;
+   (has-type Γ true bool)]
+
+  [
+   ----------------------- &quot;T-False&quot;
+   (has-type Γ false bool)]
+
+  [
+   -------------------- &quot;T-Unit&quot;
+   (has-type Γ () unit)]
+
+  [
+   ---------------------- &quot;T-ConflictError&quot;
+   (has-type Γ [⊛ : τ] τ)]
+
+  [
+   ---------------------- &quot;T-EmptyError&quot;
+   (has-type Γ [∅ : τ] τ)]
+  
+  [(has-type (x : τ_dom Γ) e τ_rng)
+   ---------------------------------------------- &quot;T-App&quot;
+   (has-type Γ (λ [x : τ_dom] e) (τ_dom → τ_rng))]
+
+  [(has-type Γ e_dom τ_dom)
+   (has-type Γ e_fun (τ_dom → τ_rng))
+   ---------------------------------- &quot;T-Abs&quot;
+   (has-type Γ (e_fun e_dom) τ_rng)]
+
+  [(has-type Γ e_i τ_i) ...
+   (has-type Γ e_just bool)
+   (has-type Γ e_cons τ)
+   (side-condition (same τ τ_i ...))
+   ------------------------------------------- &quot;T-Default&quot;
+   (has-type Γ {e_i ... ¦ e_just :- e_cons} τ)])
+
+(test-equal
+ (judgment-holds (has-type (jet : unit ·) jet τ) τ)
+ &#39;(unit))
+
+(test-equal
+ (judgment-holds (has-type (set : unit ·) jet τ) τ)
+ &#39;())
+
+(test-equal
+ (judgment-holds (has-type · true τ) τ)
+ &#39;(bool))
+
+(test-equal
+ (judgment-holds (has-type · false τ) τ)
+ &#39;(bool))
+
+(test-equal
+ (judgment-holds (has-type · () τ) τ)
+ &#39;(unit))
+
+(test-equal
+ (judgment-holds
+  (has-type (alpha : unit (alpha : bool ·)) alpha τ) τ)
+ &#39;(unit))
+
+(test-equal
+ (judgment-holds (has-type · (λ [x : bool] ()) τ) τ)
+ &#39;((bool → unit)))
+
+(test-equal
+ (judgment-holds
+  (has-type (helper : (unit → bool) ·) 
+            (λ [dummy : unit] (helper dummy)) τ) τ)
+ &#39;((unit → bool)))
+
+(test-equal
+ (judgment-holds
+  (has-type (aux : (bool → (bool → bool)) ·)
+            ((aux true) false) τ) τ)
+ &#39;(bool))
+
+(test-equal
+ (judgment-holds (has-type · [⊛ : unit] τ) τ)
+ &#39;(unit))
+
+(test-equal
+ (judgment-holds (has-type · [∅ : bool] τ) τ)
+ &#39;(bool))
+
+(test-equal
+ (judgment-holds
+  (has-type (e₁ : unit (e₂ : unit (e₃ : unit ·)))
+            {e₁ e₂ ¦ true :- e₃} τ) τ)
+ &#39;(unit))
+
+(test-equal
+ (judgment-holds
+  (has-type (e₁ : unit (e₂ : bool (e₃ : unit ·)))
+            {e₁ e₂ ¦ false :- e₃} τ) τ)
+ &#39;())
+
+(test-equal
+ (judgment-holds
+  (has-type · {{¦ false :- true} ¦ true :- true} τ) τ)
+ &#39;(bool))
+
+#| _____Reduction rules for the default calculus_____ |#
+
+(define-metafunction DefaultCalculus
+  not-∅? : e -&gt; boolean
+  [(not-∅? ∅) #f]
+  [(not-∅? e) #t])
+
+(define-metafunction DefaultCalculus
+  not-⊛? : e -&gt; boolean
+  [(not-⊛? ⊛) #f]
+  [(not-⊛? e) #t])
+
+(define-judgment-form
+  DefaultCalculus
+  #:mode (reduces-to I O)
+  #:contract (reduces-to e e)
+  [(reduces-to e e_prime)
+   (side-condition (not-⊛? e_prime))
+   (side-condition (not-∅? e_prime))
+   ---------------------------------------------- &quot;D-Context&quot;
+   (reduces-to (in-hole C e) (in-hole C e_prime))]
+
+  [(reduces-to e ⊛)
+   ---------------------------- &quot;D-ContextConflictError&quot;
+   (reduces-to (in-hole C e) ⊛)]
+
+  [(reduces-to e ∅)
+   ----------------------------- &quot;D-ContextEmptyError&quot;
+   (reduces-to (in-hole Cλ e) ∅)]
+
+  [
+   ------------------------------------------------- &quot;D-Beta&quot;
+   (reduces-to ((λ [x : τ] e) v) (substitute e x v))]
+
+  [
+   ---------------------------------- &quot;D-DefaultTrueNoExceptions&quot;
+   (reduces-to {∅ ... ¦ true :- v} v)]
+
+  [
+   ----------------------------------- &quot;D-DefaultFalseNoExceptions&quot;
+   (reduces-to {∅ ... ¦ false :- e} ∅)]
+
+  [(side-condition (not-∅? v))
+   ------------------------------------------- &quot;D-DefaultOneException&quot;
+   (reduces-to {∅ ... v ∅ ... ¦ e_1 :- e_2} v)]
+
+  [(side-condition (not-∅? v_i))
+   (side-condition (not-∅? v_j))
+   ------------------------------------------ &quot;D-DefaultExceptionsConflict&quot;
+   (reduces-to
+    {e_i ... v_i e_j ... v_j ¦ e_1 :- e_2} ⊛)])
+
+(test-equal
+ (judgment-holds
+  (reduces-to ((λ [x : bool] true) ((λ [x : bool] ∅) true)) e) e)
+ &#39;(∅))
+
+(test-equal
+ (judgment-holds
+   (reduces-to {((λ [x : bool] ⊛) true) ¦ true :- true} e) e)
+ &#39;(⊛))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {((λ [x : bool] x) true) ¦ true :- true} e) e)
+ &#39;({true ¦ true :- true}))
+
+(test-equal
+ (judgment-holds
+  (reduces-to ((λ (x : bool) ()) true) e) e)
+ &#39;(()))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {∅ ¦ {∅ ∅ ¦ true :- ∅} :- false} e) e)
+ &#39;(∅))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {∅ {∅ ¦ true :- ⊛} ¦ true :- false} e) e)
+ &#39;(⊛))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {∅ {∅ ¦ true :- false} ¦ true :- false} e) e)
+ &#39;({∅ false ¦ true :- false}))
+
+(test-equal
+ (judgment-holds
+  (reduces-to ((λ [x : bool] false)
+               {¦ false :- (λ (x : bool) x)}) e) e)
+ &#39;(∅))
+
+(test-equal
+ (judgment-holds
+  (reduces-to ((λ [x : bool] {∅ ⊛ ∅ ¦ true :- true}) false) e) e)
+ &#39;({∅ ⊛ ∅ ¦ true :- true}))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {∅ ⊛ ∅ ¦ true :- true} e) e)
+ &#39;(⊛))
+
+(test-equal
+ (judgment-holds
+  (reduces-to ((λ [x : bool] x) {true ∅ ∅ ¦ true :- false}) e) e)
+ &#39;(((λ [x : bool] x) true)))
+
+(test-equal
+ (judgment-holds
+  (reduces-to ((λ [x : bool] x) true) e) e)
+ &#39;(true))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {true false ∅ true ¦ true :- true} e) e)
+ &#39;(⊛))
+
+(test-equal
+ (judgment-holds
+  (reduces-to {{¦ false :- true} ¦ true :- true} e) e)
+ &#39;())
+
+#| _____Reduction rules for the default calculus, II_____ |#
+
+(define-metafunction DefaultCalculus
+  is-⊛? : e -&gt; boolean
+  [(is-⊛? ⊛) #t]
+  [(is-⊛? e) #f])
+
+(define-metafunction DefaultCalculus
+  is-∅? : e -&gt; boolean
+  [(is-∅? ∅) #t]
+  [(is-∅? e) #f])
+
+(define reduces-to-alt
+  (reduction-relation
+   DefaultCalculus #:domain e #:codomain e
+   ;; _____ D-Beta _____
+   (--&gt; (in-hole Cλ-alt ((λ [x : τ] e) v)) e_step
+        (where e_step (substitute e x v))
+        (side-condition (equal? (term ∅) (term e_step)))
+        &quot;D-Beta/ContextEmptyError&quot;)
+   (--&gt; (in-hole C-alt ((λ [x : τ] e) v)) e_step
+        (where e_step (substitute e x v))
+        (side-condition (equal? (term ⊛) (term e_step)))
+        &quot;D-Beta/ContextConflictError&quot;)
+   (--&gt; (in-hole C-alt ((λ [x : τ] e) v)) (in-hole C-alt e_step)
+        (where e_step (substitute e x v))
+        (side-condition (not (equal? (term e_step) (term ∅))))
+        (side-condition (not (equal? (term e_step) (term ⊛))))
+        &quot;D-Beta/Context&quot;)
+   ;; _____ D-DefaultTrueNoExceptions _____
+   (--&gt; (in-hole Cλ-alt {∅ ... ¦ true :- ∅}) ∅
+        &quot;D-DefaultTrueNoExceptions/ContextEmptyError&quot;)
+   (--&gt; (in-hole C-alt {∅ ... ¦ true :- ⊛}) ⊛
+        &quot;D-DefaultTrueNoExceptions/ContextConflictError&quot;)
+   (--&gt; (in-hole C-alt {∅ ... ¦ true :- v}) (in-hole C-alt v)
+        (side-condition (not (equal? (term v) (term ∅))))
+        (side-condition (not (equal? (term v) (term ⊛))))
+        &quot;D-DefaultTrueNoExceptions/Context&quot;)
+   ;; _____ D-DefaultFalseNoExceptions _____
+   (--&gt; (in-hole Cλ-alt {∅ ... ¦ false :- e}) ∅
+        &quot;D-DefaultFalseNoExceptions&quot;)
+   ;; _____ D-DefaultOneException _____
+   (--&gt; (in-hole C-alt {∅ ... ⊛ ∅ ... ¦ e_1 :- e_2}) ⊛
+        &quot;D-DefaultOneException/ContextConflictError&quot;)
+   (--&gt; (in-hole C-alt {∅ ... v ∅ ... ¦ e_1 :- e_2}) (in-hole C-alt v)
+        (side-condition (not (equal? (term v) (term ∅))))
+        (side-condition (not (equal? (term v) (term ⊛))))
+        &quot;D-DefaultOneException/Context&quot;)
+   ;; _____ D-DefaultExceptionsConflict _____
+   (--&gt; (in-hole C-alt {e_i ... v_i e_j ... v_j ¦ e_1 :- e_2}) ⊛
+        (side-condition (not (equal? (term v_i) (term ∅))))
+        (side-condition (not (equal? (term v_j) (term ∅))))
+        &quot;D-DefaultExceptionsConflict&quot;)))
+
+(test--&gt;
+ reduces-to-alt
+ (term ((λ [x : bool] true) ((λ [x : bool] ∅) true)))
+ (term ∅))
+
+(test--&gt;
+ reduces-to-alt
+ (term {((λ [x : bool] ⊛) true) ¦ true :- true})
+ (term ⊛))
+
+(test--&gt;
+ reduces-to-alt
+ (term {((λ [x : bool] x) true) ¦ true :- true})
+ (term {true ¦ true :- true}))
+
+(test--&gt;
+ reduces-to-alt
+ (term ((λ [x : bool] ()) true))
+ (term ()))
+
+(test--&gt;
+ reduces-to-alt
+ (term {∅ ¦ {∅ ∅ ¦ true :- ∅} :- false})
+ (term ∅))
+
+(test--&gt;
+ reduces-to-alt
+ (term {∅ {∅ ¦ true :- ⊛} ¦ true :- false})
+ (term ⊛))
+
+(test--&gt;
+ reduces-to-alt
+ (term {∅ {∅ ¦ true :- false} ¦ true :- false})
+ (term {∅ false ¦ true :- false}))
+
+(test--&gt;
+ reduces-to-alt
+ (term ((λ [x : bool] false) {¦ false :- (λ [x : bool] x)}))
+ (term ∅))
+
+(test--&gt;
+ reduces-to-alt
+ (term ((λ [x : bool] {∅ ⊛ ∅ ¦ true :- true}) false))
+ (term {∅ ⊛ ∅ ¦ true :- true}))
+
+(test--&gt;
+ reduces-to-alt
+ (term {∅ ⊛ ∅ ¦ true :- true})
+ (term ⊛))
+
+(test--&gt;
+ reduces-to-alt
+ (term ((λ [x : bool] x) {true ∅ ∅ ¦ true :- false}))
+ (term ((λ (x : bool) x) true)))
+
+(test--&gt;
+ reduces-to-alt
+ (term ((λ [x : bool] x) true))
+ (term true))
+
+(test--&gt;
+ reduces-to-alt
+ (term {true false ∅ true ¦ true :- true})
+ (term ⊛))
+
+#| _____Compiling the scope language to a default calculus_____ |#
+
+(define-metafunction DefaultCalculus
+  lookup-scope : P S -&gt; σ
+  [(lookup-scope ((scope S a ...) σ ...) S)
+   (scope S a ...)]
+  [(lookup-scope ((scope S_other a ...) σ ...) S)
+   (lookup-scope (σ ...) S)]
+  [(lookup-scope () S)
+   ,(error &quot;lookup-scope&quot;)])
+
+(test-equal
+ (term (lookup-scope P1/ScopeLanguage A)) #t
+ #:equiv (λ (actual expected) #t))
+
+(test-equal
+ (term (lookup-scope P2/ScopeLanguage B)) #t
+ #:equiv (λ (actual expected) #t))
+
+(define-metafunction DefaultCalculus
+  local-vars-helper : (a ...) (x ...) -&gt; (x ...)
+  [(local-vars-helper () (x ...))
+   (x ...)]
+  [(local-vars-helper ((define x : τ e) a ...) (x_i ...))
+   (local-vars-helper (a ...) (x_i ...))
+   (side-condition (member (term x) (term (x_i ...))))]
+  [(local-vars-helper ((define x : τ e) a ...) (x_i ...))
+   (local-vars-helper (a ...) (x_i ... x))
+   (side-condition (not (member (term x) (term (x_i ...)))))]
+  [(local-vars-helper ((define (Sₙ x_prime) : τ e) a ...) (x ...))
+   (local-vars-helper (a ...) (x ...))]
+  [(local-vars-helper ((call Sₙ) a ...) (x ...))
+   (local-vars-helper (a ...) (x ...))])
+
+(define-metafunction DefaultCalculus
+  local-vars : σ -&gt; (x ...)
+  [(local-vars (scope S a ...))
+   (local-vars-helper (a ...) ())])
+
+(test-equal
+ (term 
+  (local-vars
+   (scope S
+     (define x : bool 
+       {¦ true :- true})
+     (define y : bool
+       {¦ true :- true})
+     (define x : bool 
+       {¦ true :- true})
+     (define x : bool 
+       {¦ true :- true})
+     (define z : bool 
+       {¦ true :- true}))))
+ (term (x y z)))
+
+(test-equal
+ (term 
+  (local-vars
+   (scope S
+     (define ((T 1) x) : bool
+       {¦ true :- true}))))
+ (term ()))
+
+(define-metafunction DefaultCalculus
+  calls-helper : (a ...) (Sₙ ...) -&gt; (Sₙ ...)
+  [(calls-helper () (Sₙ ...))
+   (Sₙ ...)]
+  [(calls-helper ((define l : τ e) a ...) (Sₙ ...))
+   (calls-helper (a ...) (Sₙ ...))]
+  [(calls-helper ((call Sₙ) a ...) (Sₙ_i ...))
+   (calls-helper (a ...) (Sₙ_i ... Sₙ))
+   (side-condition (not (member (term Sₙ) (term (Sₙ_i ...)))))]
+  [(calls-helper ((call Sₙ) a ...) (Sₙ_i ...))
+   (calls-helper (a ...) (Sₙ_i ...))
+   (side-condition (member (term Sₙ) (term (Sₙ_i ...))))])
+
+(define-metafunction DefaultCalculus
+  calls : σ -&gt; (Sₙ ...)
+  [(calls (scope S a ...))
+   (calls-helper (a ...) ())])
+
+(test-equal
+ (term 
+  (calls
+   (scope S
+     (define x : bool 
+       {¦ true :- true})
+     (call (T 1))
+     (define ((U 1) x) : bool
+       {¦ true :- true})
+     (call (T 2))
+     (define z : bool
+       {¦ true :- true}))))
+ (term ((T 1) (T 2))))
+
+(test-equal
+ (term 
+  (calls
+   (scope S
+     (call (T 1))
+     (call (T 1)))))
+ (term ((T 1))))
+
+(define-metafunction DefaultCalculus
+  replicate : (x ...) -&gt; (e ...)
+  [(replicate ()) ()]
+  [(replicate (x x_rest ...))
+   ((λ [u : unit] ∅) e_rest ...)
+   (where (e_rest ...) (replicate (x_rest ...)))])
+
+(define-metafunction DefaultCalculus
+  init : (Sₙ ...) P e -&gt; e
+  [(init () P e)
+   e]
+  [(init ((S number) Sₙ ...) P e)
+   (let-values [(((S number) x) ...)  (values e_thunk ...)]
+     (init (Sₙ ...) P e))
+   (where (x ...) (local-vars (lookup-scope P S)))
+   (where (e_thunk ...) (replicate (x ...)))])
+
+(define-metafunction DefaultCalculus
+  force : Δ x -&gt; e
+  [(force ·     x) (x ())]
+  [(force (x Δ) x) x]
+  [(force (_ Δ) x) (force Δ x)])
+
+(define-metafunction DefaultCalculus
+  thunk : Δ l -&gt; e
+  [(thunk ·     l) l]
+  [(thunk (l Δ) l) (λ [u : unit] l)]
+  [(thunk (_ Δ) l) (thunk Δ l)])
+
+(define-metafunction DefaultCalculus
+  add : (l ...) Δ -&gt; Δ
+  [(add ()             Δ) Δ]
+  [(add (l l_rest ...) Δ) (add (l_rest ...) (l Δ))])
+
+(define-judgment-form
+  DefaultCalculus
+  #:mode (compiles-atoms I I I I O)
+  #:contract (compiles-atoms P S Δ (a ...) e)
+
+  [(where σ (lookup-scope P S))
+   (where (x ...) (local-vars σ))
+   (where (e ...) ((force Δ x) ...))
+   --------------------------------- &quot;C-Empty&quot;
+   (compiles-atoms P S Δ ()
+     (values e ...))]
+
+  [(compiles-atoms P S (l Δ) (a ...) e_rest)
+   ------------------------------------------------- &quot;C-Def&quot;
+   (compiles-atoms P S Δ ((define l : τ e) a ...)
+     (let-values [(l) (values {(l ()) ¦ true :- e})] 
+       e_rest))]
+
+  [(where (x_call ...) (local-vars (lookup-scope P S_call)))
+   (where (l_call ...) (((S_call number) x_call) ...))
+   (compiles-atoms P S (add (l_call ...) Δ) (a ...) e_rest)
+   (side-condition (not (equal? (term S) (term S_call))))
+   --------------------------------------------------------- &quot;C-Call&quot;
+   (compiles-atoms P S Δ ((call (S_call number)) a ...)
+     (let-values [(l_call ...) (S_call (thunk Δ l_call) ...)]
+       e_rest))])
+
+(define-judgment-form
+  DefaultCalculus
+  #:mode (compiles-scope I I O)
+  #:contract (compiles-scope P S σ)
+  [(where σ (lookup-scope P S))
+   (where (scope S a ...) σ)
+   (where (Sₙ_i ...) (calls σ))
+   (where (x_i ...) (local-vars σ))
+   (compiles-atoms P S · (a ...) e)
+   ----------------------------------- &quot;C-Scope&quot;
+   (compiles-scope P S
+     (define (S x_i ...)
+       (init (Sₙ_i ...) P e)))])
+
+(define-judgment-form
+  DefaultCalculus
+  #:mode (compiles I O)
+  #:contract (compiles P P)
+  [(where P (σ_sl ...))
+   (where ((scope S a ...) ...) (σ_sl ...))
+   (compiles-scope P S σ_dc) ...
+   ------------------------------------------ &quot;C-Program&quot;
+   (compiles (σ_sl ...) (σ_dc ...))])
+
+(test-equal
+ (judgment-holds (compiles P1/ScopeLanguage P) P)
+ (list (term P1/DefaultCalculus)))
+
+(test-equal
+ (judgment-holds (compiles P2/ScopeLanguage P) P)
+ (list (term P2/DefaultCalculus)))
+
+(test-equal
+ (judgment-holds (compiles P3/ScopeLanguage P) P)
+ (list (term P3/DefaultCalculus)))
+
+#| _____Translation rules from default calculus to lambda calculus_____ |#
+
+(define-judgment-form
+  EnrichedLambdaCalculus
+  #:mode (translates I O)
+  #:contract (translates e e)
+  [
+   ------------------------ &quot;C-EmptyError&quot;
+   (translates ∅ (raise ∅))]
+
+  [
+   ------------------------ &quot;C-ConflictError&quot;
+   (translates ⊛ (raise ⊛))]
+
+  [
+   ---------------- &quot;C-Var&quot;
+   (translates x x)]
+
+  [
+   -------------------------- &quot;C-Var/Subscope&quot;
+   (translates (Sₙ x) (Sₙ x))]
+
+  [
+   ---------------------- &quot;C-Literal/true&quot;
+   (translates true true)]
+
+  [
+   ------------------------ &quot;C-Literal/false&quot;
+   (translates false false)]
+
+  [
+   ------------------ &quot;C-Literal/unit&quot;
+   (translates () ())]
+
+  [(translates e e_prime)
+   ---------------------------------------------- &quot;C-Abs&quot;
+   (translates (λ [x : τ] e) (λ [x : τ] e_prime))]
+
+  [(translates e_1 e_1_prime)
+   (translates e_2 e_2_prime)
+   -------------------------------------------- &quot;C-App&quot;
+   (translates (e_1 e_2) (e_1_prime e_2_prime))]
+
+  [(translates e_i e_i_prime) ...
+   ---------------------------------------------------- &quot;C-Values&quot;
+   (translates (values e_i ...) (values e_i_prime ...))]
+
+  [(translates l_i l_i_prime) ...
+   (translates e_assign e_assign_prime)
+   (translates e_tail e_tail_prime)
+   --------------------------------------------- &quot;C-LetValues&quot;
+   (translates 
+    (let-values [(l_i ...) e_assign] 
+      e_tail)
+    (let-values [(l_i_prime ...) e_assign_prime]
+      e_tail_prime))]
+
+  [(translates e_i e_i_prime) ...
+   (translates e_just e_just_prime)
+   (translates e_cons e_cons_prime)
+   ----------------------------------------------- &quot;C-Default&quot;
+   (translates 
+    {e_i ... ¦ e_just :- e_cons}
+    (let-values 
+        [(r-exceptions)
+         (values
+          (fold-left
+           (λ [acc : (option top)]
+             (λ [elt : (unit → top)]
+               (let-values 
+                   [(elt)
+                    (values
+                     (try (Some (elt ()))
+                          [∅ None]))]
+                 (match (values acc elt)
+                   [(values None elt)
+                    elt]
+                   [(values (Some acc) None)
+                    (Some acc)]
+                   [(values (Some acc) (Some elt))
+                    (raise ⊛)]))))
+           None
+           (list (λ [u : unit] e_i_prime) ...)))]
+      (match r-exceptions
+        [None (if e_just_prime
+                  e_cons_prime
+                  (raise ∅))]
+        [(Some exception) exception])))])</code></pre>
+</body>
+</html>

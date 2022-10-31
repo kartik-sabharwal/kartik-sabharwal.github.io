@@ -1,0 +1,245 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="viewport" content="width=320, initial-scale=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+      font-size: small;
+    }
+    h1, h2, h3 {
+      color: gray;
+    }
+    h1 {
+      border-bottom: 1px solid black;
+    }
+    table {
+      width: 100%;
+    }
+    tr.header {
+      color: white;
+      background: black;
+    }
+    tr.odd {
+      background: lightgray;
+    }
+    td {
+      text-align: center;
+    }
+  </style>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<!--
+Creating a metric in SVG format for my daily schedules using Haskell's diagrams
+package and refreshing it daily with cron.
+-->
+<h1 id="a-metric-for-daily-schedules">A Metric for Daily Schedules</h1>
+<p>I organize my daily schedules by month. There is a folder called <code>2020</code> and it has subfolders for each month - <code>1</code>, <code>2</code>, ..., <code>12</code>. Each month should have one file for each day a schedule was created and reported. For example March may have <code>1.ses</code>, <code>2.ses</code>, ..., <code>31.ses</code>. It may be missing a few files. The missing files are for days where I didn't create a schedule or I didn't record how I used my time.</p>
+<p>I wanted to create a diagram that would give me an overview of my religiousness with the schedules. A square for each day of each month with the reported days in green and the unreported days colored red. <a href="http://www.fyrbll.me/haskell/diagrams/schedule-metric/report.svg">Example</a>.</p>
+<h2 id="generation">Generation</h2>
+<p>I wrote a single Haskell file called <code>ScheduleMetric.hs</code>, which I ran as</p>
+<div class="sourceCode"><pre class="sourceCode sh"><code class="sourceCode bash">$ <span class="ex">runghc</span> -package --ghc-arg=diagrams-lib \
+-package --ghc-arg=diagrams-svg \
+-- ScheduleMetric.hs -w 200 -o /home/pi/schedule/report/report.svg</code></pre></div>
+<p>The file was</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE NoMonomorphismRestriction #-}</span>
+<span class="ot">{-# LANGUAGE FlexibleContexts #-}</span>
+<span class="ot">{-# LANGUAGE TypeFamilies #-}</span>
+
+<span class="kw">module</span> <span class="dt">ScheduleMetric</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Control.Monad</span>
+<span class="kw">import </span><span class="dt">Data.Function</span>
+<span class="kw">import </span><span class="dt">Data.Functor</span>
+<span class="kw">import </span><span class="dt">Data.List</span>
+<span class="kw">import </span><span class="dt">Data.Maybe</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Set</span> <span class="kw">as</span> <span class="dt">Set</span>
+<span class="kw">import </span><span class="dt">Diagrams.Prelude</span>
+<span class="kw">import </span><span class="dt">Diagrams.Backend.SVG.CmdLine</span>
+<span class="kw">import </span><span class="dt">System.Directory</span>
+<span class="kw">import </span><span class="dt">System.FilePath</span>
+
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span>
+    <span class="co">-- for each month, prepare the set of days for which a schedule is present</span>
+    scheduled <span class="fu">&lt;&amp;&gt;</span>
+    
+    <span class="co">-- construct a Haskell representation of the diagram</span>
+    scorecard <span class="fu">&gt;&gt;=</span>
+    
+    <span class="co">-- render the diagram</span>
+    mainWith
+
+<span class="co">-- given a list of (month number, set of days in month) pairs construct a</span>
+<span class="co">-- Haskell representation of the diagram to be rendered</span>
+<span class="ot">scorecard ::</span> [(<span class="dt">Int</span>, <span class="dt">Set.Set</span> <span class="dt">Int</span>)] <span class="ot">-&gt;</span> <span class="dt">Diagram</span> <span class="dt">B</span>
+scorecard monthSets <span class="fu">=</span>
+    monthSets            <span class="fu">&amp;</span>
+
+    <span class="co">-- prepare a separate &quot;scorecard&quot; for each month</span>
+    map monthlyScorecard <span class="fu">&amp;</span>
+
+
+    <span class="co">-- arrange the monthly scorecards vertically, starting from January at the</span>
+    <span class="co">-- top to December at the bottom </span>
+    vcat
+
+<span class="co">-- given a tuple whose first element is the number of a month (a number between</span>
+<span class="co">-- 1 and 12, inclusive) and second element is a set of numbers representing</span>
+<span class="co">-- dates within that month for which a schedule is present, create the Haskell</span>
+<span class="co">-- representation of horizontal line of squares where the leftmost square is</span>
+<span class="co">-- just the number of the month and the subsequent squares represent the days of</span>
+<span class="co">-- that month. Each day where a schedule is present is colored green otherwise</span>
+<span class="co">-- it is colored red.</span>
+<span class="ot">monthlyScorecard ::</span> (<span class="dt">Int</span>, <span class="dt">Set.Set</span> <span class="dt">Int</span>) <span class="ot">-&gt;</span> <span class="dt">Diagram</span> <span class="dt">B</span>
+monthlyScorecard (month, days) <span class="fu">=</span> monthName <span class="fu">|||</span> monthScorecard
+  <span class="kw">where</span>
+    <span class="co">-- the leftmost square, a white box containing the number of the month.</span>
+    monthName <span class="fu">=</span> month <span class="fu">#</span> show <span class="fu">#</span> text <span class="fu">#</span> fontSizeL <span class="dv">2</span> <span class="fu">#</span> fc black <span class="fu">&lt;&gt;</span>
+        square <span class="dv">2</span> <span class="fu">#</span> fc white
+
+    <span class="co">-- the subsequent squares, there is one for each day of the month.</span>
+    monthScorecard <span class="fu">=</span> [<span class="dv">1</span><span class="fu">..</span>month <span class="fu">&amp;</span> size]      <span class="fu">&amp;</span>
+        map (\i <span class="ot">-&gt;</span> square <span class="dv">2</span> <span class="fu">#</span> fc (color i)) <span class="fu">&amp;</span>
+        hcat
+
+    <span class="co">-- the count of days in the month given its number. 1 represents January</span>
+    <span class="co">-- which has 31 days, 2 represents February with 28 days, and so on.</span>
+    size month
+        <span class="fu">|</span> month <span class="fu">==</span> <span class="dv">2</span>              <span class="fu">=</span> <span class="dv">28</span>
+        <span class="fu">|</span> month <span class="ot">`elem`</span> [<span class="dv">4</span>,<span class="dv">6</span>,<span class="dv">9</span>,<span class="dv">11</span>] <span class="fu">=</span> <span class="dv">30</span>
+        <span class="fu">|</span> otherwise               <span class="fu">=</span> <span class="dv">31</span>
+
+    <span class="co">-- if a day is present in the input set then its corresponding box is</span>
+    <span class="co">-- colored green and otherwise colored red.</span>
+    color day
+        <span class="fu">|</span> day <span class="ot">`Set.member`</span> days <span class="fu">=</span> green
+        <span class="fu">|</span> otherwise             <span class="fu">=</span> red
+
+<span class="co">-- this function evaluates to a list of tuples where the first element of each</span>
+<span class="co">-- tuple is a number representing a month (1 stands for January and 12 stands</span>
+<span class="co">-- for December) and the second element is a set of numbers representing the</span>
+<span class="co">-- days in the month for which schedules are present</span>
+<span class="co">--</span>
+<span class="co">-- suppose the contents of the target directory are:</span>
+<span class="co">-- 1/1.ses</span>
+<span class="co">-- 1/4.ses</span>
+<span class="co">-- 1/9.ses</span>
+<span class="co">-- 2/3.ses</span>
+<span class="co">-- 2/4.ses</span>
+<span class="co">--</span>
+<span class="co">-- then the function below will evaluate to</span>
+<span class="co">-- [ (1, {1,4,9})</span>
+<span class="co">-- , (2, {3,4})</span>
+<span class="co">-- ]</span>
+<span class="ot">scheduled ::</span> <span class="dt">IO</span> [(<span class="dt">Int</span>, <span class="dt">Set.Set</span> <span class="dt">Int</span>)]
+scheduled <span class="fu">=</span>
+    listDirectory target        <span class="fu">&lt;&amp;&gt;</span>
+    sort                        <span class="fu">&lt;&amp;&gt;</span>
+    <span class="co">-- make the paths of the month folders absolute</span>
+    map (target <span class="fu">&lt;/&gt;</span>)            <span class="fu">&gt;&gt;=</span>
+    filterM doesDirectoryExist  <span class="fu">&lt;&amp;&gt;</span>
+    <span class="co">-- turn each folder path into a Just (folder path, month number) or Nothing</span>
+    map dirMonthFromDirectory   <span class="fu">&lt;&amp;&gt;</span>
+    <span class="co">-- remove all the Nothing values</span>
+    catMaybes                   <span class="fu">&gt;&gt;=</span> \directories <span class="ot">-&gt;</span>
+    forM directories             <span class="fu">$</span>  \(directory, month) <span class="ot">-&gt;</span>
+    listDirectory directory     <span class="fu">&lt;&amp;&gt;</span>
+    <span class="co">-- make the paths of the day files absolute</span>
+    map (directory <span class="fu">&lt;/&gt;</span>)         <span class="fu">&gt;&gt;=</span>
+    filterM doesFileExist       <span class="fu">&lt;&amp;&gt;</span>
+    <span class="co">-- throw away any file that doesn&#39;t end in a .md or a .ses</span>
+    filter mdOrSes              <span class="fu">&lt;&amp;&gt;</span>
+    <span class="co">-- turn each file path into a (Just day) or Nothing</span>
+    map dayFromFile             <span class="fu">&lt;&amp;&gt;</span>
+    catMaybes                   <span class="fu">&lt;&amp;&gt;</span>
+    Set.fromList                <span class="fu">&lt;&amp;&gt;</span> \set <span class="ot">-&gt;</span>
+    (month, set)
+
+<span class="co">-- given the path to a file, relative or absolute, evaluate to True if the</span>
+<span class="co">-- file&#39;s extension indicates that it is a markdown file or a simple Emacs</span>
+<span class="co">-- spreadsheet file, this is relevant because my daily schedule files are</span>
+<span class="co">-- confined to these two formats.</span>
+<span class="ot">mdOrSes ::</span> FilePath <span class="ot">-&gt;</span> <span class="dt">Bool</span>
+mdOrSes filename <span class="fu">=</span> <span class="st">&quot;.md&quot;</span> <span class="ot">`isSuffixOf`</span> filename <span class="fu">||</span> <span class="st">&quot;.ses&quot;</span> <span class="ot">`isSuffixOf`</span> filename
+
+<span class="co">-- given the relative or absolute path to a directory, kill the part containing</span>
+<span class="co">-- its parent directory and if the remaining part - the &quot;dir2&quot; in &quot;/dir1/dir2/&quot;</span>
+<span class="co">-- - is a String that can be read as a number, do so and return a tuple, the</span>
+<span class="co">-- first element of which is the directory path as-is and the second part is the</span>
+<span class="co">-- numbe and if that remaining part cannot be read as a number then return</span>
+<span class="co">-- Nothing.</span>
+<span class="ot">dirMonthFromDirectory ::</span> FilePath <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (FilePath, <span class="dt">Int</span>)
+dirMonthFromDirectory dir
+    <span class="fu">|</span> baseName <span class="fu">&amp;</span> isNumber <span class="fu">=</span> (dir, baseName <span class="fu">&amp;</span> read) <span class="fu">&amp;</span> <span class="dt">Just</span>
+    <span class="fu">|</span> otherwise           <span class="fu">=</span> <span class="dt">Nothing</span>
+  <span class="kw">where</span>
+    baseName <span class="fu">=</span> dir <span class="fu">&amp;</span> takeBaseName
+
+<span class="co">-- given the path to a file, relative or absolute, kill its extension and</span>
+<span class="co">-- directory portion, and if the remaining part - the &quot;base&quot; in</span>
+<span class="co">-- &quot;/dir1/dir2/base.ses&quot; - is a string that can be read as a number, do so and</span>
+<span class="co">-- return the number. Otherwise return None.</span>
+<span class="ot">dayFromFile ::</span> FilePath <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Int</span>
+dayFromFile file
+    <span class="fu">|</span> baseName <span class="fu">&amp;</span> isNumber <span class="fu">=</span> baseName <span class="fu">&amp;</span> read <span class="fu">&amp;</span> <span class="dt">Just</span>
+    <span class="fu">|</span> otherwise           <span class="fu">=</span> <span class="dt">Nothing</span>
+  <span class="kw">where</span>
+    baseName <span class="fu">=</span> file <span class="fu">&amp;</span> takeBaseName
+
+<span class="co">-- evaluates to True if the argument is a String containing only digits, False</span>
+<span class="co">-- otherwise</span>
+<span class="ot">isNumber ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>
+isNumber s <span class="fu">=</span> s <span class="fu">&amp;</span> map (<span class="ot">`elem`</span> <span class="st">&quot;0123456789&quot;</span>) <span class="fu">&amp;</span> and
+
+<span class="co">-- the directory containing numbered folders representing months</span>
+target <span class="fu">=</span> <span class="st">&quot;/home/pi/schedule/2020&quot;</span></code></pre></div>
+<h2 id="automation">Automation</h2>
+<p>I used <code>cron</code> to refresh the diagram once every day at 10 pm US CDT.</p>
+<p>I started by making sure that the <code>cron</code> daemon was running. <code>$ systemctl status cron</code> was good enough to check that it was active.</p>
+<p>Then I followed the instructions [here] to use <code>crontab -e</code> to schedule a new task. I added the line</p>
+<pre><code>0 23 * * * /usr/bin/runghc -package --ghc-arg=diagrams-lib -package --ghc-arg=diagrams-svg -- /home/pi/code/haskell/schedule-metric/ScheduleMetric.hs -w 200 -o /home/pi/schedule/report/report.svg</code></pre>
+</body>
+</html>

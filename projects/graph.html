@@ -1,0 +1,202 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="viewport" content="width=320, initial-scale=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+      font-size: small;
+    }
+    h1, h2, h3 {
+      color: gray;
+    }
+    h1 {
+      border-bottom: 1px solid black;
+    }
+    table {
+      width: 100%;
+    }
+    tr.header {
+      color: white;
+      background: black;
+    }
+    tr.odd {
+      background: lightgray;
+    }
+    td {
+      text-align: center;
+    }
+  </style>
+  <style type="text/css">code{white-space: pre;}</style>
+</head>
+<body>
+<!--
+A proof that if there is a walk from vertex a to vertex b in a graph G then
+there is also a path from vertex a to vertex b in G, written in and verified by
+the Lean Theorem Prover. Part of a "formalize something in Lean" assignment for
+the Spring 2019 iteration of CMU's Interactive Theorem Proving course.
+-->
+<h1 id="lean-walk-implies-path">Lean: Walk implies Path</h1>
+<p>This is some code I wrote as part of a &quot;formalize something in Lean&quot; assignment for CMU's Interactive Theorem Proving course in Spring 2019. It wouldn't have been possible without the assistance of Professor Jeremy Avigad and course TA Mario Carneiro during office hours.</p>
+<p>After setting up Lean on my Mac OS system I created a new Lean project using the directions from the Lean Community's <a href="https://leanprover-community.github.io/leanproject.html">Using leanproject</a> page. The name of the project doesn't really matter.</p>
+<p>I put the code below in a file <code>graph.lean</code> within the project's <code>src</code> directory.</p>
+<pre><code>import data.list.basic
+import data.list.nodup
+import data.nat.basic
+
+/- 
+I defined a *graph* as a binary relation between elements of a vertex set α. I
+believe this definition corresponds to infinite directed graphs where self-edges
+are possible.
+
+Then I defined the notion of a *walk* from vertex a to vertex b, which is just a
+sequence of movements along edges that one can follow to reach vertex b from
+vertex a. 
+
+Next, I defined a *path* as a walk with no repeated vertices.
+
+The main theorem that I proved was &quot;if there is a walk from vertex a to vertex b
+in graph g then there is also a path from vertex a to vertex b in g&quot;, the others
+are intermediate results. 
+-/
+
+def graph (α : Type) [decidable_eq α] := (α → α → Prop)
+
+inductive walk {α : Type} [decidable_eq α] (g : graph α) (a : α) : list α → α → Prop
+| one  : walk [] a
+| cons {b c : α} {l : list α} : walk l b → g b c → walk (b :: l) c
+
+def path {α : Type} [decidable_eq α] (g : graph α) (a : α) (l : list α) (b : α) : Prop := 
+  walk g a l b ∧ (b :: l).nodup
+
+def walk_of_walk_mem_drop_index_of {α : Type} [decidable_eq α] 
+  {g : graph α} {a : α} {l : list α} {d : α} :
+    walk g a l d → ∀ (c : α), c ∈ l → walk g a (list.drop (1 + list.index_of c l) l) c := 
+begin
+  intros w_ad c c_in_l
+, induction w_ad
+, case walk.one :
+  { simp * at * }
+, case walk.cons :
+  { rename l      l_ad 
+  , rename w_ad_b b
+  , rename w_ad_l l_ab
+  , rename w_ad_a w_ab
+  , rw list.index_of
+  , rw list.find_index
+  , by_cases (c = b)
+  , { simp * at * }
+  , { simp * at * 
+    , rw list.index_of at w_ad_ih
+    , assumption
+    }
+  }
+end
+
+def not_mem_of_nodup_mem_drop_index_of {α : Type} [decidable_eq α] {l : list α} {b : α} : 
+  list.nodup l → b ∈ l → b ∉ list.drop (1 + list.index_of b l) l :=
+  begin
+    assume nodup_l
+  , assume in_l
+  , induction l with x xs
+  , case list.nil : 
+    { simp }
+  , case list.cons : 
+    { have b_eq_x_or_neq_x_and_in_xs, from list.eq_or_ne_mem_of_mem in_l
+    , apply or.elim b_eq_x_or_neq_x_and_in_xs
+    , { assume eq_b_x
+      , rw list.index_of
+      , rw list.find_index
+      , apply list.not_mem_of_nodup_cons
+      , simp * at *
+      }
+    , { assume b_neq_x_and_in_xs
+      , have b_in_xs, from b_neq_x_and_in_xs.right
+      , have nodup_xs, from and.right (list.nodup_cons.mp nodup_l)
+      , have ih, from l_ih nodup_xs b_in_xs
+      , simp * at *
+      }
+    }
+  end
+
+def sublist_path {α : Type} [decidable_eq α] {g : graph α} {a : α} {l : list α} {c : α} :
+  path g a l c → ∀ (b : α), b ∈ l → ∃ (l&#39; : list α), l&#39; &lt;:+ l ∧ path g a l&#39; b :=
+  begin
+    assume path_ac
+  , intro b
+  , assume in_l_b
+  , existsi (list.drop (1 + list.index_of b l) l)
+  , split
+  , { apply list.drop_suffix }
+  , { rw path
+    , split
+    , { apply walk_of_walk_mem_drop_index_of path_ac.left
+      , assumption
+      }
+    , { simp [list.nodup]
+      , split
+      , { apply not_mem_of_nodup_mem_drop_index_of
+        , { exact and.right (list.nodup_cons.mp path_ac.right) }
+        , assumption
+        }
+      , { apply list.nodup_of_sublist  
+        , { apply list.sublist_of_suffix 
+          , apply list.drop_suffix
+          }
+        , { exact and.right (list.nodup_cons.mp path_ac.right)
+          }
+        }
+      }
+    }
+  end
+
+def path_walk {α : Type} [decidable_eq α] {g : graph α} {a : α} : Π {l : list α} {c : α}, 
+  walk g a l c → ∃ l&#39;, path g a l&#39; c := 
+  begin
+    intros l_ac c walk_ac
+  , induction walk_ac
+  , case walk.one :
+    { existsi ([] : list α)
+    , rw path
+    , constructor
+    , { exact walk.one }
+    , { simp }
+    }
+  , case walk.cons :
+    { rename walk_ac_c c, rename walk_ac_b b, rename walk_ac_a_1 edge_bc
+    , rename walk_ac_l l_ab, rename walk_ac_a walk_ab, rename walk_ac_ih ih
+    , cases ih with l_ab&#39; path_ab
+    , by_cases c ∈ (b :: l_ab&#39;)
+    , { simp [(∈)] at h
+      , rw [list.mem] at h
+      , apply or.elim h
+      , { assume eq_b_c
+        , rw eq_b_c
+        , existsi l_ab&#39; 
+        , exact path_ab
+        }
+      , { assume mem_l_ab&#39;_c
+        , have anonymous, from sublist_path path_ab c mem_l_ab&#39;_c 
+        , cases anonymous with l_ac&#39; path_ac
+        , existsi l_ac&#39;
+        , rw path
+        , split
+        , { exact path_ac.right.left }
+        , { apply path_ac.right.right }
+        }
+      }
+    , { existsi (b :: l_ab&#39;)
+      , rw path at path_ab
+      , rw path
+      , constructor 
+      , { exact walk.cons path_ab.left edge_bc }
+      , { simp * at * }
+      }
+    }
+  end</code></pre>
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="viewport" content="width=320, initial-scale=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+      font-size: small;
+    }
+    h1, h2, h3 {
+      color: gray;
+    }
+    h1 {
+      border-bottom: 1px solid black;
+    }
+    table {
+      width: 100%;
+    }
+    tr.header {
+      color: white;
+      background: black;
+    }
+    tr.odd {
+      background: lightgray;
+    }
+    td {
+      text-align: center;
+    }
+  </style>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<!--
+A tutorial on how to use brick - the Haskell terminal interface builder
+library - to write a program that displays a sequence of letters on your
+terminal screen and adds a marquee effect to make it scroll left.
+-->
+<h1 id="megalaser">Megalaser</h1>
+<h2 id="objective">Objective</h2>
+<p>I want to write a program that displays the word &quot;MEGALASER&quot; on my terminal screen, adding a marquee effect to make it scroll left.</p>
+<p>To be more concrete, on running the program the terminal window should show:</p>
+<pre><code>|\\    //|/========= /======== //====\\ ||         //====\\ //========/=========||=======\
+||\\  //||||        //        |/      \|||        |/      \|||        ||        ||      ||
+|| \\// ||======    ||   ====\||======||||        ||======||\\======||======    ||=======/
+||      ||||        \\      ||||      ||||        ||      ||        ||||        ||     \\ 
+||      ||\========= \========||      ||\\========||      ||========//\=========||      \\</code></pre>
+<p>Additionally, every tenth of a second, I want one column of characters to disappear into the left boundary of my screen.</p>
+<p>After one second, or ten tenths of a second, the image on the screen should change to:</p>
+<pre><code>/========= /======== //====\\ ||         //====\\ //========/=========||=======\
+||        //        |/      \|||        |/      \|||        ||        ||      ||
+======    ||   ====\||======||||        ||======||\\======||======    ||=======/
+||        \\      ||||      ||||        ||      ||        ||||        ||     \\ 
+\========= \========||      ||\\========||      ||========//\=========||      \\</code></pre>
+<p>When there are no more character columns left, the program should end and take me back to the prompt.</p>
+<p>As far as tools go, I'd like to use the Haskell package <a href="https://github.com/samtay/tetris"><code>brick</code></a> to achieve the objective.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<ul class="incremental">
+<li>GHC 8.4.4</li>
+<li><code>cabal-install</code> 3.0.0.0</li>
+</ul>
+<p>The <code>executable</code> stanza of this project's Cabal file looks like</p>
+<pre><code>-- megalaser.cabal
+
+executable megalaser
+  main-is:          Megalaser.hs
+  build-depends:      base &gt;= 4.11.1 &amp;&amp; &lt; 4.12
+                    , brick &gt;= 0.52 &amp;&amp; &lt; 0.53
+                    , vty &gt;= 5.27 &amp;&amp; &lt; 5.28
+  default-language: Haskell2010
+  ghc-options:      -O -threaded -Wall</code></pre>
+<p><code>brick</code> needs the <code>-threaded</code> under <code>ghc-options</code>. Please don't omit it!</p>
+<p>The <code>-O</code> and <code>-Wall</code> are optional, yet helpful.</p>
+<h2 id="brick-real-quick"><code>brick</code>, Real Quick</h2>
+<p>Throughout this section, keep in mind that <code>brick</code> is a model-view-controller framework.</p>
+<p>Your application's <code>main</code> will generally call one of the three functions with result type <code>IO a</code> that <code>brick</code> provides.</p>
+<ul class="incremental">
+<li><p><code>simpleMain</code>, which does not allow event handling of any kind. It's just a static user interface.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">simpleMain
+<span class="ot">    ::</span> <span class="dt">Ord</span> n
+    <span class="ot">=&gt;</span> <span class="dt">Widget</span> n <span class="co">-- the user interface to be rendered on-screen</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> ()</code></pre></div></li>
+<li><p><code>defaultMain</code>, which allows you to specify an initial state, as well as event handlers which will change the state in response to key presses and mouse movements. Custom events, including time-based events, are out of scope.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">defaultMain
+<span class="ot">    ::</span> <span class="dt">Ord</span> n
+    <span class="ot">=&gt;</span> <span class="dt">App</span> s e n <span class="co">{- a bundle of values used to update the</span>
+<span class="co">                 -- application&#39;s state in response to events</span>
+<span class="co">                 -}</span>
+    <span class="ot">-&gt;</span> s         <span class="co">-- the application&#39;s initial state</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> s</code></pre></div></li>
+<li><p><code>customMain</code>, which allows you to define custom events in addition to everything you can do with <code>defaultMain</code>.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">customMain
+<span class="ot">    ::</span> <span class="dt">Ord</span> n
+    <span class="ot">=&gt;</span> <span class="dt">Vty</span>             <span class="co">-- initial Vty handle</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Vty</span>          <span class="co">{- an IO action to build a Vty handle, used when</span>
+<span class="co">                       -- the terminal needs to be reinitialized</span>
+<span class="co">                       -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">BChan</span> e) <span class="co">{- a stack to which user defined events can be</span>
+<span class="co">                       -- added, and from which they can be removed</span>
+<span class="co">                       -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">App</span> s e n       <span class="co">{- a bundle of values used to update the</span>
+<span class="co">                       -- application&#39;s state in response to events</span>
+<span class="co">                       -}</span>
+    <span class="ot">-&gt;</span> s               <span class="co">-- the application&#39;s initial state</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> s</code></pre></div></li>
+</ul>
+<p>To use these functions in a Haskell program, you need to know how to create values that belong to the types <code>Widget n</code>, <code>App s e n</code>, <code>Vty</code>, and <code>BChan e</code>.</p>
+<h3 id="vty"><code>Vty</code></h3>
+<p>A value of type <code>Vty</code> can be created using functions from the <code>vty</code> package.</p>
+<p>Consider the function</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">Graphics.Vty.mkVty
+<span class="ot">    ::</span> <span class="dt">Graphics.Vty.Config.Config</span> <span class="co">{- a configuration value to change the</span>
+<span class="co">                                  -- behavior of the Vty handle</span>
+<span class="co">                                  -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Graphics.Vty.Vty</span></code></pre></div>
+<p><code>Graphics.Vty.Config.defaultConfig</code> provides a ready-made configuration.</p>
+<p>If that isn't good enough, look at the other options in the <code>Graphics.Vty.Config</code> module.</p>
+<h3 id="widget-n"><code>Widget n</code></h3>
+<p>The <code>brick</code> package has functions to create values of the type <code>Widget n</code>.</p>
+<p>There's <code>Brick.Widgets.Core.str :: String -&gt; Brick.Types.Widget n</code>, which renders a string in the terminal as-is.</p>
+<p>The <code>Brick.Widgets.Core</code> module has many more options, but this project will use <code>str</code> exclusively.</p>
+<p>It's worth mentioning that values belonging to <code>Widget n</code> can be packed vertically, using <code>Brick.Widgets.Core.(&lt;+&gt;)</code>, and also horizontally, using <code>Brick.Widgets.Core.(&lt;=&gt;)</code>.</p>
+<h3 id="bchan-e"><code>BChan e</code></h3>
+<p>You can create values of type <code>BChan e</code> using the function</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">Brick.BChan.newBChan
+<span class="ot">    ::</span> <span class="dt">Int</span>                      <span class="co">-- maximum capacity of the channel</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Brick.Types.BChan</span> a)</code></pre></div>
+<p>To add an element of type <code>e</code> to a <code>BChan e</code>, use</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">Brick.BChan.writeBChan<span class="ot"> ::</span> <span class="dt">Brick.Types.BChan</span> a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">IO</span> ()</code></pre></div>
+<p>Generally events are automatically removed from a channel by <code>customMain</code>.</p>
+<h3 id="app-s-e-n"><code>App s e n</code></h3>
+<p>The type <code>App s e n</code> appears often in the type signature above.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Brick.Main.App</span>
+    s <span class="co">-- the application state type</span>
+    e <span class="co">-- the application event type</span>
+    n <span class="co">-- values of this type can be assigned as names to resources</span>
+    { appDraw
+<span class="ot">          ::</span> s          <span class="co">-- the state to render</span>
+          <span class="ot">-&gt;</span> [<span class="dt">Widget</span> n] <span class="co">-- how the state should look when rendered</span>
+    , appChooseCursor
+<span class="ot">          ::</span> s                        <span class="co">-- application&#39;s state</span>
+          <span class="ot">-&gt;</span> [<span class="dt">CursorLocation</span> n]       <span class="co">{- a list of cursor locations</span>
+<span class="co">                                      -- requested by various widgets</span>
+<span class="co">                                      -}</span>
+          <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">CursorLocation</span> n) <span class="co">-- the definitive cursor location</span>
+    , appHandleEvent
+<span class="ot">          ::</span> s                 <span class="co">-- application&#39;s state</span>
+          <span class="ot">-&gt;</span> <span class="dt">BrickEvent</span> n e    <span class="co">{- the event to handle, it could be</span>
+<span class="co">                               -- a custom or default event</span>
+<span class="co">                               -}</span>
+          <span class="ot">-&gt;</span> <span class="dt">EventM</span> n (<span class="dt">Next</span> s) <span class="co">-- how to handle the event</span>
+    , appStartEvent
+<span class="ot">          ::</span> s          <span class="co">-- application&#39;s state</span>
+          <span class="ot">-&gt;</span> <span class="dt">EventM</span> n s <span class="co">-- how to handle the start of the application </span>
+    , appAttrMap
+<span class="ot">          ::</span> s       <span class="co">-- application&#39;s state</span>
+          <span class="ot">-&gt;</span> <span class="dt">AttrMap</span> <span class="co">{- a mapping between attribute names and attributes,</span>
+<span class="co">                     -- where attributes are basically color schemes</span>
+<span class="co">                     -}</span>
+    }</code></pre></div>
+<h3 id="cursorlocation-n"><code>CursorLocation n</code></h3>
+<p><code>Brick.Types.CursorLocation n</code> has just one constructor</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Brick.Types.CursorLocation</span>
+<span class="ot">    ::</span> <span class="dt">Brick.Types.Location</span>         <span class="co">-- a wrapper around a row, column pair</span>
+    <span class="ot">-&gt;</span> <span class="dt">Maybe</span> n                      <span class="co">{- the name of the Widget to which this</span>
+<span class="co">                                    -- location belongs</span>
+<span class="co">                                    -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">Brick.Types.CursorLocation</span> n</code></pre></div>
+<p><code>Brick.Types.Location</code> also has just one constructor</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Brick.Types.Location</span>
+<span class="ot">    ::</span> (<span class="dt">Int</span>, <span class="dt">Int</span>)           <span class="co">-- the row and column of the location</span>
+    <span class="ot">-&gt;</span> <span class="dt">Brick.Types.Location</span></code></pre></div>
+<h3 id="brickevent-n-e"><code>BrickEvent n e</code></h3>
+<p>A value of this type doesn't need to be supplied, it has to be decomposed.</p>
+<p>Check the documentation for the <code>Brick.Types</code> module for information about <code>BrickEvent</code>'s different constructors - there's one for default Vty events, one for user defined events, and finally two for mouse events.</p>
+<h3 id="eventm-n-s"><code>EventM n s</code></h3>
+<p>The <code>Brick.Main</code> module provides functions that can generate values belonging to <code>Brick.Types.EventM n s</code>. Here are two such functions.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">Brick.Main.continue
+<span class="ot">    ::</span> s                             <span class="co">-- the application&#39;s new state</span>
+    <span class="ot">-&gt;</span> <span class="dt">Brick.Types.EventM</span> n (<span class="dt">Next</span> s)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">Brick.Main.halt
+<span class="ot">    ::</span> s                             <span class="co">-- the application&#39;s final state</span>
+    <span class="ot">-&gt;</span> <span class="dt">Brick.Types.EventM</span> n (<span class="dt">Next</span> s)</code></pre></div>
+<p>There are other functions as well, but this project doesn't use them.</p>
+<h3 id="attrmap"><code>AttrMap</code></h3>
+<p>The easiest way to create a value of type <code>AttrMap</code> is to use the function</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">Brick.AttrMap.forceAttrMap
+<span class="ot">    ::</span> <span class="dt">Graphics.Vty.Attributes.Attr</span> <span class="co">-- defines color and style of characters</span>
+    <span class="ot">-&gt;</span> <span class="dt">Brick.AttrMap.AttrMap</span></code></pre></div>
+<p>A value of type <code>Graphics.Vty.Attributes.Attr</code> can be obtained from <code>Graphics.Vty.Attributes.defAttr</code>.</p>
+<p>Lots more customization is possible, but it just isn't relevant to this project.</p>
+<h2 id="model-view-controller">Model-View-Controller</h2>
+<h3 id="model---deciding-the-application-state">Model - Deciding the Application State</h3>
+<p>I want the application's state type, in other words the <code>s</code> in <code>App s e n</code>, to be:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">MegalaserState</span> <span class="fu">=</span> <span class="dt">MS</span>
+    {<span class="ot"> unMS ::</span> [<span class="dt">String</span>] <span class="co">-- a list of lines to print to the screen</span>
+    }</code></pre></div>
+<p>This way, if I want to write just the letter &quot;M&quot; to the window, I need to define the following state.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">_m ::</span> <span class="dt">MegalaserState</span>
+_m <span class="fu">=</span> (<span class="dt">MS</span>
+    [ <span class="st">&quot;|\\\\    //|&quot;</span>
+    , <span class="st">&quot;||\\\\  //||&quot;</span>
+    , <span class="st">&quot;|| \\\\// ||&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    ])</code></pre></div>
+<p>It will also be easy to &quot;concatenate&quot; two states and make a new state. The first lines of each state need to be concatenated, then the second lines, and so on, to yield a new list of lines.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">Semigroup</span> <span class="dt">MegalaserState</span> <span class="kw">where</span>
+    a <span class="fu">&lt;&gt;</span> b <span class="fu">=</span> <span class="dt">MS</span> (zipWith (<span class="fu">++</span>) (unMS a) (unMS b))
+
+<span class="kw">instance</span> <span class="dt">Monoid</span> <span class="dt">MegalaserState</span> <span class="kw">where</span>
+    mempty <span class="fu">=</span> <span class="dt">MS</span> (repeat <span class="st">&quot;&quot;</span>)</code></pre></div>
+<p>Here's how someone might combine states using <code>(&lt;&gt;)</code>, illustrated in GHCi.</p>
+<pre><code>λ&gt; (putStr . unlines . unMS) (_m &lt;&gt; _m)
+|\\    //||\\    //|
+||\\  //||||\\  //||
+|| \\// |||| \\// ||
+||      ||||      ||
+||      ||||      ||</code></pre>
+<h3 id="view---writing-appdraw">View - Writing <code>appDraw</code></h3>
+<p>I need to supply a function with type <code>MegalaserState -&gt; [Widget n]</code> to the <code>App</code> constructor.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">appDraw&#39; ::</span> <span class="dt">MegalaserState</span> <span class="ot">-&gt;</span> [<span class="dt">Widget</span> <span class="dt">Int</span>]
+appDraw&#39; s <span class="fu">=</span> [(Brick.Core.Widget.str <span class="fu">.</span> unlines <span class="fu">.</span> unMS) s]</code></pre></div>
+<h3 id="controller---deciding-the-application-event-type">Controller - Deciding the Application Event Type</h3>
+<p>The application needs to handle timed events.</p>
+<p>This <a href="https://github.com/samtay/tetris"><code>tetris</code></a> project on GitHub creates a custom event type <code>Tick</code> to achieve this. I want to do the same.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Tick</span> <span class="fu">=</span> <span class="dt">Tick</span></code></pre></div>
+<p>I'll need to create a bounded channel in my program's <code>main</code> function to hold events of type <code>Tick</code>.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- newBChan is from Brick.BChan</span>
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> <span class="kw">do</span>
+    <span class="co">{- code -}</span>
+    tickChan <span class="ot">&lt;-</span> newBChan <span class="dv">10</span>
+    <span class="co">{- code -}</span></code></pre></div>
+<p>A <code>Tick</code> event will be fed to <code>tickChan</code> every tenth of a second by a separate thread.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- newBChan and writeBChan are from Brick.BChan</span>
+<span class="co">-- forkIO and threadDelay are from Control.Concurrent</span>
+<span class="co">-- forever is from Control.Monad</span>
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> <span class="kw">do</span>
+    <span class="co">{- code -}</span>
+    tickChan <span class="ot">&lt;-</span> newBChan <span class="dv">10</span>
+    _ <span class="ot">&lt;-</span> forkIO (forever (<span class="kw">do</span>
+    threadDelay <span class="dv">100000</span>         <span class="co">-- 10^5 microseconds = 0.1 second</span>
+    writeBChan tickChan <span class="dt">Tick</span>))
+    <span class="co">{- code -}</span></code></pre></div>
+<p><code>Tick</code> events will need to be handled. I plan to use:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">appHandleEvent&#39;
+<span class="ot">    ::</span> <span class="dt">MegalaserState</span>
+    <span class="ot">-&gt;</span> <span class="dt">BrickEvent</span> <span class="dt">Int</span> <span class="dt">Tick</span>
+    <span class="ot">-&gt;</span> <span class="dt">EventM</span> <span class="dt">Int</span> (<span class="dt">Next</span> <span class="dt">MegalaserState</span>)
+appHandleEvent&#39; s _  <span class="fu">=</span> <span class="kw">case</span> (removeFirstColumn s) <span class="kw">of</span>
+    (<span class="dt">Just</span> s&#39;) <span class="ot">-&gt;</span> continue s&#39;                       
+    _         <span class="ot">-&gt;</span> halt s
+  <span class="kw">where</span>
+    removeFirstColumn s <span class="fu">=</span> <span class="kw">case</span> (unMS s) <span class="kw">of</span>
+        []     <span class="ot">-&gt;</span> <span class="dt">Nothing</span>
+        msgLns <span class="ot">-&gt;</span> <span class="kw">case</span> (maximum (map length msgLns)) <span class="kw">of</span>
+            <span class="dv">0</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span>
+            _ <span class="ot">-&gt;</span> <span class="dt">Just</span> (<span class="dt">MS</span> (map tail msgLns))</code></pre></div>
+<h2 id="putting-everything-together">Putting Everything Together</h2>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">module</span> <span class="dt">Main</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Brick.AttrMap</span>
+<span class="kw">import </span><span class="dt">Brick.BChan</span>
+<span class="kw">import </span><span class="dt">Brick.Main</span> 
+<span class="kw">import </span><span class="dt">Brick.Types</span>
+<span class="kw">import </span><span class="dt">Brick.Widgets.Core</span>
+<span class="kw">import </span><span class="dt">Control.Concurrent</span>
+<span class="kw">import </span><span class="dt">Control.Monad</span>
+<span class="kw">import </span><span class="dt">Graphics.Vty</span>
+
+<span class="kw">data</span> <span class="dt">Tick</span> <span class="fu">=</span> <span class="dt">Tick</span>
+
+<span class="kw">newtype</span> <span class="dt">MegalaserState</span> <span class="fu">=</span> <span class="dt">MS</span> {<span class="ot">unMS ::</span> [<span class="dt">String</span>]}
+
+<span class="kw">instance</span> <span class="dt">Semigroup</span> <span class="dt">MegalaserState</span> <span class="kw">where</span>
+    s1 <span class="fu">&lt;&gt;</span> s2 <span class="fu">=</span> <span class="dt">MS</span> (zipWith (<span class="fu">++</span>) (unMS s1) (unMS s2))
+
+<span class="kw">instance</span> <span class="dt">Monoid</span> <span class="dt">MegalaserState</span> <span class="kw">where</span>
+    mempty <span class="fu">=</span> <span class="dt">MS</span> (repeat <span class="st">&quot;&quot;</span>)
+
+<span class="ot">removeFirstColumn ::</span> <span class="dt">MegalaserState</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">MegalaserState</span>
+removeFirstColumn s <span class="fu">=</span> <span class="kw">case</span> (unMS s) <span class="kw">of</span>
+    []     <span class="ot">-&gt;</span> <span class="dt">Nothing</span>
+    msgLns <span class="ot">-&gt;</span> <span class="kw">case</span> (maximum (map length msgLns)) <span class="kw">of</span>
+        <span class="dv">0</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span>
+        _ <span class="ot">-&gt;</span> <span class="dt">Just</span> (<span class="dt">MS</span> (map tail msgLns))
+
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> <span class="kw">do</span>
+    vty      <span class="ot">&lt;-</span> mkVty defaultConfig
+    
+    tickChan <span class="ot">&lt;-</span> newBChan <span class="dv">10</span>
+    _ <span class="ot">&lt;-</span> forkIO (forever (<span class="kw">do</span>
+        threadDelay <span class="dv">100000</span>
+        writeBChan tickChan <span class="dt">Tick</span>))
+
+    _ <span class="ot">&lt;-</span> customMain 
+        vty 
+        (mkVty defaultConfig)
+        (<span class="dt">Just</span> tickChan)
+        (<span class="dt">App</span>
+            appDraw&#39;
+            appChooseCursor&#39; 
+            appHandleEvent&#39;
+            appStartEvent&#39;
+            appAttrMap&#39;)
+        (mconcat [_m, _e, _g, _a, _l, _a, _s, _e, _r])
+    
+    return ()
+
+<span class="ot">appDraw&#39; ::</span> <span class="dt">MegalaserState</span> <span class="ot">-&gt;</span> [<span class="dt">Widget</span> <span class="dt">Int</span>]
+appDraw&#39; s <span class="fu">=</span> [(str <span class="fu">.</span> unlines <span class="fu">.</span> unMS) s]          
+
+appChooseCursor&#39;
+<span class="ot">    ::</span> <span class="dt">MegalaserState</span>
+    <span class="ot">-&gt;</span> [<span class="dt">CursorLocation</span> <span class="dt">Int</span>]
+    <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">CursorLocation</span> <span class="dt">Int</span>)
+appChooseCursor&#39; _ _ <span class="fu">=</span> <span class="dt">Nothing</span> 
+
+appHandleEvent&#39;
+<span class="ot">    ::</span> <span class="dt">MegalaserState</span>
+    <span class="ot">-&gt;</span> <span class="dt">BrickEvent</span> <span class="dt">Int</span> <span class="dt">Tick</span>
+    <span class="ot">-&gt;</span> <span class="dt">EventM</span> <span class="dt">Int</span> (<span class="dt">Next</span> <span class="dt">MegalaserState</span>)
+appHandleEvent&#39; s _  <span class="fu">=</span> <span class="kw">case</span> (removeFirstColumn s) <span class="kw">of</span>
+    (<span class="dt">Just</span> s&#39;) <span class="ot">-&gt;</span> continue s&#39;                       
+    _         <span class="ot">-&gt;</span> halt s                            
+
+<span class="ot">appStartEvent&#39; ::</span> <span class="dt">MegalaserState</span> <span class="ot">-&gt;</span> <span class="dt">EventM</span> <span class="dt">Int</span> <span class="dt">MegalaserState</span>
+appStartEvent&#39; s <span class="fu">=</span> return s                         
+
+<span class="ot">appAttrMap&#39; ::</span> <span class="dt">MegalaserState</span> <span class="ot">-&gt;</span> <span class="dt">AttrMap</span>
+appAttrMap&#39; _ <span class="fu">=</span> forceAttrMap defAttr                
+
+<span class="ot">_m ::</span> <span class="dt">MegalaserState</span>
+_m <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot;|\\\\    //|&quot;</span>
+    , <span class="st">&quot;||\\\\  //||&quot;</span>
+    , <span class="st">&quot;|| \\\\// ||&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    ]
+
+<span class="ot">_e ::</span> <span class="dt">MegalaserState</span>
+_e <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot;/=========&quot;</span>
+    , <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;======    &quot;</span>
+    , <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;\\=========&quot;</span>
+    ]
+
+<span class="ot">_g ::</span> <span class="dt">MegalaserState</span>
+_g <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot; /========&quot;</span>
+    , <span class="st">&quot;//        &quot;</span>
+    , <span class="st">&quot;||   ====\\&quot;</span>
+    , <span class="st">&quot;\\\\      ||&quot;</span>
+    , <span class="st">&quot; \\========&quot;</span>
+    ]
+
+<span class="ot">_a ::</span> <span class="dt">MegalaserState</span>
+_a <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot; //====\\\\ &quot;</span>
+    , <span class="st">&quot;|/      \\|&quot;</span>
+    , <span class="st">&quot;||======||&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    ]
+
+<span class="ot">_l ::</span> <span class="dt">MegalaserState</span>
+_l <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;\\\\========&quot;</span>
+    ]
+
+<span class="ot">_s ::</span> <span class="dt">MegalaserState</span>
+_s <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot;//========&quot;</span>
+    , <span class="st">&quot;||        &quot;</span>
+    , <span class="st">&quot;\\\\======||&quot;</span>
+    , <span class="st">&quot;        ||&quot;</span>
+    , <span class="st">&quot;========//&quot;</span>
+    ]
+
+<span class="ot">_r ::</span> <span class="dt">MegalaserState</span>
+_r <span class="fu">=</span> <span class="dt">MS</span>
+    [ <span class="st">&quot;||=======\\&quot;</span>
+    , <span class="st">&quot;||      ||&quot;</span>
+    , <span class="st">&quot;||=======/&quot;</span>
+    , <span class="st">&quot;||     \\\\ &quot;</span>
+    , <span class="st">&quot;||      \\\\&quot;</span>
+    ]</code></pre></div>
+<h2 id="further-reading">Further Reading</h2>
+<p><a href="https://github.com/jtdaugherty/brick/blob/master/docs/guide.rst"><code>brick</code> User Guide</a></p>
+</body>
+</html>

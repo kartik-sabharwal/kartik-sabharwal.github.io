@@ -1,0 +1,389 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="viewport" content="width=320, initial-scale=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+      font-size: small;
+    }
+    h1, h2, h3 {
+      color: gray;
+    }
+    h1 {
+      border-bottom: 1px solid black;
+    }
+    table {
+      width: 100%;
+    }
+    tr.header {
+      color: white;
+      background: black;
+    }
+    tr.odd {
+      background: lightgray;
+    }
+    td {
+      text-align: center;
+    }
+  </style>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<h1 id="scotty-tutorial">Scotty Tutorial</h1>
+<h2 id="objective">Objective</h2>
+<p>I wanted to make the contents of my <code>$HOME/content</code> folder publicly accessible through an HTTP server written using the Haskell library <code>scotty</code>.</p>
+<p>Suppose, for simplicity, that the server is running on <code>localhost:3000</code>.</p>
+<p>If a client requests <code>localhost:3000/path</code>, the server should treat it as a request for the file system object at <code>$HOME/content/path</code>.</p>
+<p>In case the object is a file, the file should be sent to the client as the response.</p>
+<p>Otherwise, the object must be a folder, so an HTML page with clickable links to the folder's immediate contents should be the response.</p>
+<h2 id="using-scotty">Using <code>scotty</code></h2>
+<h3 id="creating-an-io-value">Creating an <code>IO ()</code> Value</h3>
+<p>The entry point to any Haskell application is its <code>main :: IO ()</code> function.</p>
+<p><code>Web.Scotty</code> provides <code>scotty</code>, which is pretty easy to integrate into any <code>main</code> function.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">scotty
+<span class="ot">    ::</span> <span class="dt">Port</span>       <span class="co">-- port to be used by the application</span>
+    <span class="ot">-&gt;</span> <span class="dt">ScottyM</span> () <span class="co">{- a value describing the application&#39;s behavior,</span>
+<span class="co">                  -- more specifically the responses to different kinds of</span>
+<span class="co">                  -- requests</span>
+<span class="co">                  -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">IO</span> ()</code></pre></div>
+<p>For situations that demand more finer control, the module also provides:</p>
+<ul class="incremental">
+<li><code>scottyApp</code></li>
+<li><code>scottyOpts</code></li>
+<li><code>scottySocket</code></li>
+</ul>
+<h3 id="creating-a-scottym-value">Creating a <code>ScottyM ()</code> Value</h3>
+<p><code>Web.Scotty</code> has quite a few functions that eventually evaluate to a value with type <code>ScottyM ()</code> - <code>get</code>, <code>post</code>, <code>put</code>, <code>delete</code>, <code>patch</code>, <code>options</code>, <code>addRoute</code>, <code>matchAny</code>, and <code>notFound</code> - it's easy to deduce which function corresponds to which HTTP method.</p>
+<p>It makes sense for my application to only respond to properly formatted HTTP GET requests for files and folder paths, and to respond to all other requests with an error message.</p>
+<p>I believe <code>get</code> and <code>notFound</code> will satisfy my needs.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">get
+<span class="ot">    ::</span> <span class="dt">RoutePattern</span> <span class="co">{- a description of the kind of GET requests that will</span>
+<span class="co">                    -- be accepted, either as a fixed string with optional</span>
+<span class="co">                    -- parameters, or a regular expression</span>
+<span class="co">                    -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> ()   <span class="co">-- how to construct a reponse to an accepted GET request</span>
+    <span class="ot">-&gt;</span> <span class="dt">ScottyM</span> ()
+
+notFound
+<span class="ot">    ::</span> <span class="dt">ActionM</span> ()   <span class="co">-- the response to an unsupported request</span>
+    <span class="ot">-&gt;</span> <span class="dt">ScottyM</span> ()</code></pre></div>
+<h2 id="describing-a-routepattern">Describing a <code>RoutePattern</code></h2>
+<p><code>Web.Scotty</code> provides a handful of functions to create a <code>RoutePattern</code> value, each applicable to a case of a specific complexity.</p>
+<ul class="incremental">
+<li><code>literal</code>, which accepts a fixed value</li>
+<li><code>capture</code>, which accepts a request that is fixed up to a point and then contains optional named parameters</li>
+<li><code>regex</code>, which accepts requests matching a regular expression</li>
+<li><code>function</code>, which allows some other function to examine the content of the request before deciding whether to accept or reject it</li>
+</ul>
+<p><code>regex</code> seems to be the most appropriate to my objective because I know valid requests will be shaped like file paths. In other words they will be sequences of letters, numbers, hyphens, and periods, with &quot;/&quot; acting as a path separator. I will not be using characters other than these in my file or folder names.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">regex
+<span class="ot">    ::</span> <span class="dt">String</span> <span class="co">{- An extended regular expression.</span>
+<span class="co">              -- Only requests matching it are responded to.</span>
+<span class="co">              -- Any ActionM () value that uses this</span>
+<span class="co">              -- RoutePattern can access the parameter named &quot;0&quot; to get the</span>
+<span class="co">              -- whole request, and can access the parameter named &quot;1&quot;</span>
+<span class="co">              -- to extract the portion that matches the wildcard characters</span>
+<span class="co">              -- in the regex.</span>
+<span class="co">              -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">RoutePattern</span></code></pre></div>
+<h2 id="synthesizing-an-actionm-value">Synthesizing an <code>ActionM ()</code> Value</h2>
+<p>As is usual for <code>scotty</code>, <code>Web.Scotty</code> has a bunch of functions that yield an <code>ActionM a</code> value. I feel that the ones below will be enough for me.</p>
+<p><code>param</code> will let me find out which file the client wants.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">param
+<span class="ot">    ::</span> <span class="dt">Parsable</span> a
+    <span class="ot">=&gt;</span> <span class="dt">Text</span>       <span class="co">{- the name of the parameter whose value needs to be</span>
+<span class="co">                  -- fetched</span>
+<span class="co">                  -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> a</code></pre></div>
+<p>If the client requests a directory path, I need to prepare an HTML-formatted index of its contents and send it across.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">html
+<span class="ot">    ::</span> <span class="dt">Text</span>       <span class="co">{- some HTML to send over to the client -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> ()</code></pre></div>
+<p>Otherwise, if the client requests a file, I need to send that across as well.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">file
+<span class="ot">    ::</span> FilePath   <span class="co">{- the path of the file on the disk</span>
+<span class="co">                  -- to be delivered to a client as a reponse</span>
+<span class="co">                  -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> ()</code></pre></div>
+<p>I want to respond with the text &quot;Server Error&quot; or something similar when the &quot;default&quot; action raises an exception.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">rescue
+<span class="ot">    ::</span> <span class="dt">ActionM</span> a           <span class="co">{- a risky operation i.e. one that can throw an</span>
+<span class="co">                           -- exception</span>
+<span class="co">                           -}</span>
+    <span class="ot">-&gt;</span> (<span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">ActionM</span> a) <span class="co">{- this eats the message relayed by a thrown</span>
+<span class="co">                           -- exception and takes an alternate course of</span>
+<span class="co">                           -- action</span>
+<span class="co">                           -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> a</code></pre></div>
+<p>If the client requests a directory path, I need to read the directory's contents to prepare the HTML-formatted index mentioned before. IO actions need to be performed in the IO monad.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">liftAndCatchIO
+<span class="ot">    ::</span> <span class="dt">IO</span> a      <span class="co">{- an IO action to perform -}</span>
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> a</code></pre></div>
+<h2 id="filling-the-io-a-hole">Filling the <code>IO a</code> Hole</h2>
+<p><code>liftAndCatchIO</code> discussed above allows <code>IO</code> actions to be performed in the <code>ActionM</code> monad.</p>
+<p>I want to do three different <code>IO</code> actions when the application receives a request for a particular path.</p>
+<ol class="incremental" style="list-style-type: decimal">
+<li>Make sure that the path, with <code>$HOME/content/</code> prepended to it, represents an existing system location.</li>
+<li>If it does, check if the location corresponds to a file or a folder - <code>doesFileExist</code> and <code>doesDirectoryExist</code>.</li>
+<li>In case the location is a folder, prepare an HTML-style index of the folder's contents using <code>listDirectory</code>.</li>
+</ol>
+
+<h1 id="scotty-tutorial">Example</h1>
+
+<p>Here's a commented version of the server I used to host this website on Amazon Lightsail two years ago.</p>
+
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Main.hs</span>
+
+<span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
+
+<span class="kw">module</span> <span class="dt">Main</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Data.List</span> (sort, isPrefixOf, isSuffixOf)
+<span class="kw">import </span><span class="dt">Data.Text.Lazy</span> (<span class="dt">Text</span>, append, pack)
+<span class="kw">import </span><span class="dt">Regex</span>
+<span class="kw">import </span><span class="dt">System.Directory</span>
+<span class="kw">import </span><span class="dt">System.FilePath</span>
+<span class="kw">import </span><span class="dt">Web.Scotty</span>
+
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> scotty
+    <span class="co">-- the server needs to listen on port 80 for incoming HTTP requests</span>
+    <span class="dv">80</span> <span class="fu">$</span> <span class="kw">do</span>
+
+    <span class="co">-- if the request is a GET request matching the extended regular</span>
+    <span class="co">-- expression in `path`, run the action defined by `sendFileOrIndexOrError`</span>
+    get (regex&#39; path) sendFileOrIndexOrError
+    
+    <span class="co">-- if the request doesn&#39;t match the criterion above, run the action defined</span>
+    <span class="co">-- by `decline`</span>
+    notFound decline
+
+regex&#39;
+<span class="ot">    ::</span> <span class="dt">Regex</span>        <span class="co">-- a value representing an extended regular expression</span>
+    <span class="ot">-&gt;</span> <span class="dt">RoutePattern</span> <span class="co">-- a `RoutePattern` value to use with scotty&#39;s `get`</span>
+regex&#39; <span class="fu">=</span>
+    <span class="co">-- `unRegex` takes the regular expression `String` out of its `newtype`</span>
+    <span class="co">-- wrapper while `regex` transforms it into a `RoutePattern`</span>
+    regex <span class="fu">.</span> unRegex 
+
+<span class="ot">path ::</span> <span class="dt">Regex</span>
+path <span class="fu">=</span>
+    <span class="co">-- beginning of line</span>
+    bol
+    
+    <span class="co">-- `segment` here is a file or directory name preceded by a forward slash</span>
+    <span class="co">-- I expect file and directory names to have only alphabets, numbers,</span>
+    <span class="co">-- periods and hyphens, no underscores allowed</span>
+    <span class="fu">&gt;&gt;&gt;</span> atLeastOne segment
+
+    <span class="co">-- end of line</span>
+    <span class="fu">&gt;&gt;&gt;</span> eol
+  <span class="kw">where</span>
+    segment <span class="fu">=</span> group (char <span class="ch">&#39;/&#39;</span> <span class="fu">&gt;&gt;&gt;</span> many nameChar)
+    nameChar <span class="fu">=</span> oneOf [alnum, char <span class="ch">&#39;.&#39;</span>, char <span class="ch">&#39;-&#39;</span>]
+
+<span class="ot">decline ::</span> <span class="dt">ActionM</span> ()
+decline <span class="fu">=</span> text <span class="st">&quot;I don&#39;t accept requests of this form. Sorry.&quot;</span>
+
+<span class="ot">sendFileOrIndexOrError ::</span> <span class="dt">ActionM</span> ()
+sendFileOrIndexOrError <span class="fu">=</span>
+    <span class="co">-- try to run `sendFileOrIndex` but if an exception is raised don&#39;t crash,</span>
+    <span class="co">-- run `sendError` instead</span>
+    rescue sendFileOrIndex sendError
+  <span class="kw">where</span>
+    sendError errMsg <span class="fu">=</span> text (<span class="st">&quot;Server Error: &quot;</span> <span class="ot">`append`</span> errMsg)
+
+<span class="ot">sendFileOrIndex ::</span> <span class="dt">ActionM</span> ()
+sendFileOrIndex <span class="fu">=</span> <span class="kw">do</span>
+    <span class="co">-- the part of the request body that matches the regular expression is</span>
+    <span class="co">-- treated as the path of a file or folder relative to the $HOME/content</span>
+    <span class="co">-- directory, except that the first character of `relPath` is always a</span>
+    <span class="co">-- forward slash</span>
+    relPath <span class="ot">&lt;-</span> param <span class="st">&quot;0&quot;</span>
+  
+    <span class="co">-- the absolute path to $HOME</span>
+    home    <span class="ot">&lt;-</span> liftAndCatchIO getHomeDirectory
+
+    <span class="co">-- the absolute version of `relPath`</span>
+    <span class="kw">let</span> absPath <span class="fu">=</span> home <span class="fu">++</span> <span class="st">&quot;/content&quot;</span> <span class="fu">++</span> relPath
+
+    <span class="co">-- does the item at absPath even exist and is it a file?</span>
+    isFile <span class="ot">&lt;-</span> liftAndCatchIO (doesFileExist      absPath)
+
+    <span class="co">-- does the item at absPath even exist and is it a directory?</span>
+    isDir  <span class="ot">&lt;-</span> liftAndCatchIO (doesDirectoryExist absPath)
+
+    <span class="kw">case</span> (isFile, isDir) <span class="kw">of</span>
+        <span class="co">-- if `absPath` is a file then look at the extension of the file and</span>
+        <span class="co">-- set the MIME type of the response if possible, then send the content</span>
+        <span class="co">-- of the file as the response</span>
+        (<span class="dt">True</span>, _) <span class="ot">-&gt;</span> <span class="kw">do</span>
+            <span class="kw">case</span> (extnToMime <span class="fu">.</span> snd <span class="fu">.</span> splitExtension) absPath <span class="kw">of</span>
+                <span class="dt">Just</span> mime <span class="ot">-&gt;</span> setHeader <span class="st">&quot;Content-Type&quot;</span> mime 
+                <span class="dt">Nothing</span>   <span class="ot">-&gt;</span> return ()
+            file absPath
+
+        <span class="co">-- if `absPath` is a folder then generate an index page with the</span>
+        <span class="co">-- folder&#39;s contents and send that as the response</span>
+        (_, <span class="dt">True</span>) <span class="ot">-&gt;</span> createIndex (relPath, absPath) <span class="fu">&gt;&gt;=</span> html
+
+        <span class="co">-- if `absPath` is BOTH file and folder or NEITHER, something must be</span>
+        <span class="co">-- wrong</span>
+        _         <span class="ot">-&gt;</span> decline
+
+<span class="ot">extnToMime ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Text</span>
+extnToMime extn <span class="fu">=</span> <span class="kw">case</span> extn <span class="kw">of</span>
+    <span class="st">&quot;.html&quot;</span> <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;text/html; charset=utf-8&quot;</span>
+    <span class="st">&quot;.css&quot;</span>  <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;text/css&quot;</span>
+    <span class="st">&quot;.js&quot;</span>   <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;application/javascript&quot;</span>
+    <span class="st">&quot;.txt&quot;</span>  <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;text/plain; charset=utf-8&quot;</span>
+    <span class="st">&quot;.md&quot;</span>   <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;text/plain; charset=utf-8&quot;</span>
+    <span class="st">&quot;.svg&quot;</span>  <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;image/svg+xml&quot;</span>
+    <span class="st">&quot;.png&quot;</span>  <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;image/png&quot;</span>
+    <span class="st">&quot;.jpeg&quot;</span> <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;image/jpeg&quot;</span>
+    <span class="st">&quot;.tiff&quot;</span> <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;image/tiff&quot;</span>
+    <span class="st">&quot;.pdf&quot;</span>  <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="st">&quot;application/pdf&quot;</span>
+    _       <span class="ot">-&gt;</span> <span class="dt">Nothing</span>
+
+createIndex
+<span class="ot">    ::</span> ( FilePath   <span class="co">-- path of a folder relative to $HOME/content</span>
+       , FilePath   <span class="co">-- absolute path of the same folder</span>
+       )
+    <span class="ot">-&gt;</span> <span class="dt">ActionM</span> <span class="dt">Text</span>
+createIndex (relPath, absPath) <span class="fu">=</span> <span class="kw">do</span>
+    <span class="co">-- the immediate contents of the directory `absPath` not including `.` and</span>
+    <span class="co">-- `..`</span>
+    items <span class="ot">&lt;-</span> liftAndCatchIO (listDirectory absPath)
+
+    <span class="co">-- make an HTML unordered list with links to the directory&#39;s contents as</span>
+    <span class="co">-- the list items</span>
+    <span class="kw">let</span> body&#39; <span class="fu">=</span> (unorderedList <span class="fu">.</span> map createLink <span class="fu">.</span> sort) items
+
+    <span class="co">-- wrap `body&#39;` in a `&lt;body&gt;` element and wrap that in turn in an `&lt;html&gt;`</span>
+    <span class="co">-- element that has a `&lt;title&gt;`.</span>
+    return (pack (htmlWithTitleAndBody <span class="st">&quot;Contents&quot;</span> body&#39;))
+  <span class="kw">where</span>
+    createLink item <span class="fu">=</span> anchorWithHrefAndName
+        (homeUrl <span class="fu">++</span> ensureFwdSlashDelimited relPath <span class="fu">++</span> item)
+        item
+        
+    <span class="co">-- returns `s` after making sure it begins and ends with a forward slash</span>
+    <span class="co">-- because we&#39;re going to add `homeUrl` before the opening slash and the</span>
+    <span class="co">-- name of a file or folder after the closing slash</span>
+    ensureFwdSlashDelimited s <span class="fu">=</span>
+        (<span class="kw">if</span> <span class="st">&quot;/&quot;</span> <span class="ot">`isPrefixOf`</span> s <span class="kw">then</span> <span class="st">&quot;&quot;</span> <span class="kw">else</span> <span class="st">&quot;/&quot;</span>) <span class="fu">++</span>
+        s                                        <span class="fu">++</span>
+        (<span class="kw">if</span> <span class="st">&quot;/&quot;</span> <span class="ot">`isSuffixOf`</span> s <span class="kw">then</span> <span class="st">&quot;&quot;</span> <span class="kw">else</span> <span class="st">&quot;/&quot;</span>)
+
+
+<span class="ot">homeUrl ::</span> <span class="dt">String</span>
+homeUrl <span class="fu">=</span> <span class="st">&quot;http://www.fyrbll.me&quot;</span>
+
+<span class="ot">htmlWithTitleAndBody ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span>
+htmlWithTitleAndBody title body&#39; <span class="fu">=</span> unlines
+    [ <span class="st">&quot;&lt;html&gt;&quot;</span>
+    , <span class="st">&quot;  &lt;head&gt;&quot;</span>
+    , <span class="st">&quot;    &lt;title&gt;&quot;</span> <span class="fu">++</span> title <span class="fu">++</span> <span class="st">&quot;&lt;/title&gt;&quot;</span>
+    , <span class="st">&quot;  &lt;/head&gt;&quot;</span>
+    , <span class="st">&quot;  &lt;body&gt;&quot;</span> <span class="fu">++</span> body&#39; <span class="fu">++</span> <span class="st">&quot;&lt;/body&gt;&quot;</span>
+    , <span class="st">&quot;&lt;/html&gt;&quot;</span>
+    ]
+
+<span class="ot">anchorWithHrefAndName ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span>
+anchorWithHrefAndName href name <span class="fu">=</span>
+    <span class="st">&quot;&lt;a href=&quot;</span> <span class="fu">++</span> href <span class="fu">++</span> <span class="st">&quot;&gt;&quot;</span> <span class="fu">++</span> name <span class="fu">++</span> <span class="st">&quot;&lt;/a&gt;&quot;</span>
+
+<span class="ot">unorderedList ::</span> [<span class="dt">String</span>] <span class="ot">-&gt;</span> <span class="dt">String</span>
+unorderedList items <span class="fu">=</span> <span class="st">&quot;&lt;ul&gt;&quot;</span> <span class="fu">++</span> (concatMap listItem items) <span class="fu">++</span> <span class="st">&quot;&lt;/ul&gt;&quot;</span>
+  <span class="kw">where</span>
+    listItem item <span class="fu">=</span> <span class="st">&quot;&lt;li&gt;&quot;</span> <span class="fu">++</span> item <span class="fu">++</span> <span class="st">&quot;&lt;/li&gt;&quot;</span></code></pre></div>
+<p>Here's the <code>Regex</code> module from the file above.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Regex.hs</span>
+
+<span class="kw">module</span> <span class="dt">Regex</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Data.List</span> (foldl&#39;)
+
+metacharacters <span class="fu">=</span> <span class="st">&quot;()[].*?+|\\^$&quot;</span>
+
+<span class="kw">newtype</span> <span class="dt">Regex</span> <span class="fu">=</span> <span class="dt">Regex</span> {<span class="ot"> unRegex ::</span> <span class="dt">String</span> }
+
+r <span class="fu">&gt;&gt;&gt;</span> s <span class="fu">=</span> <span class="dt">Regex</span> (unRegex r <span class="fu">++</span> unRegex s)
+
+empty <span class="fu">=</span> <span class="dt">Regex</span> <span class="st">&quot;&quot;</span>
+
+oneOf rs <span class="fu">=</span> <span class="dt">Regex</span> (<span class="st">&quot;[&quot;</span> <span class="fu">++</span> unRegex (foldl&#39; (<span class="fu">&gt;&gt;&gt;</span>) empty rs) <span class="fu">++</span> <span class="st">&quot;]&quot;</span>)
+
+group r <span class="fu">=</span> <span class="dt">Regex</span> (<span class="st">&quot;(&quot;</span> <span class="fu">++</span> unRegex r <span class="fu">++</span> <span class="st">&quot;)&quot;</span>)
+
+many r <span class="fu">=</span> <span class="dt">Regex</span> (unRegex r <span class="fu">++</span> <span class="st">&quot;*&quot;</span>)
+
+atLeastOne r <span class="fu">=</span> <span class="dt">Regex</span> (unRegex r <span class="fu">++</span> <span class="st">&quot;+&quot;</span>)
+
+any <span class="fu">=</span> <span class="dt">Regex</span> <span class="st">&quot;.&quot;</span>
+
+char c <span class="fu">=</span> <span class="dt">Regex</span> (<span class="kw">if</span> c <span class="ot">`elem`</span> metacharacters
+    <span class="kw">then</span> [<span class="ch">&#39;\\&#39;</span>, c]
+    <span class="kw">else</span> [c])
+
+bol <span class="fu">=</span> <span class="dt">Regex</span> <span class="st">&quot;^&quot;</span>
+
+eol <span class="fu">=</span> <span class="dt">Regex</span> <span class="st">&quot;$&quot;</span>
+
+alnum <span class="fu">=</span> <span class="dt">Regex</span> <span class="st">&quot;[:alnum:]&quot;</span>
+
+atMostOne r <span class="fu">=</span> <span class="dt">Regex</span> (unRegex r <span class="fu">++</span> <span class="st">&quot;?&quot;</span>)</code></pre></div>
+<p>Its makefile.</p>
+<div class="sourceCode"><pre class="sourceCode makefile"><code class="sourceCode makefile"><span class="dv">server:</span><span class="dt"> Main.hs Regex.hs</span>
+    ghc Main.hs -o server -package directory -package filepath <span class="ch">\</span>
+    -package scotty -package text
+    rm Main.hi Main.o Regex.hi Regex.o</code></pre></div>
+<p>To start it once it's compiled.</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="fu">sudo</span> ./server <span class="kw">&amp;</span></code></pre></div>
+<p>To stop it (assuming no other processes with the name &quot;server&quot;).</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="fu">sudo</span> pkill server</code></pre></div>
+</body>
+</html>

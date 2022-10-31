@@ -1,0 +1,533 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta name="viewport" content="width=320, initial-scale=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+      font-size: small;
+    }
+    h1, h2, h3 {
+      color: gray;
+    }
+    h1 {
+      border-bottom: 1px solid black;
+    }
+    table {
+      width: 100%;
+    }
+    tr.header {
+      color: white;
+      background: black;
+    }
+    tr.odd {
+      background: lightgray;
+    }
+    td {
+      text-align: center;
+    }
+  </style>
+  <style type="text/css">code{white-space: pre;}</style>
+</head>
+<body>
+<!--
+Modeled a Rubik's cube in Lean, running #eval on a cube prints it to standard
+output. Added many explanatory notes. Part of a "formalize something in Lean"
+assignment for the Spring 2019 iteration of CMU's Interactive Theorem Proving
+course.
+-->
+<h1 id="lean-modeling-a-rubiks-cube">Lean: Modeling a Rubik's Cube</h1>
+<p>This is some code I wrote as part of a &quot;formalize something in Lean&quot; assignment for CMU's Interactive Theorem Proving course in Spring 2019. It wouldn't have been possible without the assistance of Professor Jeremy Avigad and course TA Mario Carneiro during office hours.</p>
+<p>After setting up Lean on my Mac OS system I created a new Lean project using the directions from the Lean Community's <a href="https://leanprover-community.github.io/leanproject.html">Using leanproject</a> page. The name of the project doesn't really matter.</p>
+<p>I put the code below in a file <code>cube.lean</code> within the project's <code>src</code> directory.</p>
+<pre><code>/-
+INTRODUCTION
+============
+
+Having not known much about Rubik&#39;s cubes before, I wanted to
+find out how to represent such cubes using a data structure.
+
+For this homework, I made two attempts at representing a Rubik&#39;s
+cube. The representation in Part I was less than ideal and was
+scrapped after a discussion with Mario, but I&#39;m including it to
+demonstrate that a very &#39;literal&#39; representation of a Rubik&#39;s
+cube is far from practical. Based on Mario&#39;s suggestion I made
+a second attempt at representing a cube using a mapping from
+vectors in ℤ³ to colored &#39;stickers&#39; on the cube. Using the second
+representation, defining the cube and the possible operations on
+it was much easier. 
+-/
+
+import data.matrix.basic
+
+/-
+PART 1
+======
+-/
+
+namespace old_representation
+
+inductive color : Type
+| white  : color
+| red    : color
+| blue   : color
+| orange : color
+| green  : color
+| yellow : color
+
+inductive cubelet : Type
+| corner        : color → color → color → cubelet
+| side          : color → color → cubelet
+| center        : color → cubelet
+| middle_corner : color → color → cubelet
+| middle_side   : color → cubelet
+
+def cube : Type := list cubelet
+
+/-
+How did I decide on the representation below?
+
+First I considered the cube with the following net:
+      W W W
+      W W W
+      W W W
+R R R B B B O O O G G G
+R R R B B B O O O G G G
+R R R B B B O O O G G G
+      Y Y Y
+      Y Y Y
+      Y Y Y
+
+Then I numbered the cubelets like so, after rotating
+the cube such that the blue face was directly facing
+me:
+       0  1  2  BACK
+ TOP   3  4  5  MID
+       6  7  8  FRONT
+
+       9 10 11  BACK
+ MID  12  _ 13  MID
+      14 15 16  FRONT
+
+      17 18 19  BACK
+ BOT  20 21 22  MID
+      23 24 25  FRONT
+
+I decided on the colors for each cubelet like this:
+  If the cubelet is a &#39;corner&#39;:
+    Rotate the cube so that the cubelet occupies
+    position &#39;6&#39; in the diagram above. Then supply
+    colors to the constructor in the order
+    color facing the front,
+    color facing the left,
+    color facing the top.
+
+  If the cubelet is a &#39;side&#39;:
+    Rotate the cube so that the cubelet occupies
+    position &#39;7&#39; in the diagram above. Then supply
+    colors to the constructor in the order
+    color facing the front,
+    color facing the top.
+
+  If the cubelet is a &#39;center&#39;:
+    There is only one color to supply, so there&#39;s
+    no ambiguity.
+
+  If the cubelet is a &#39;middle_corner&#39;:
+    Rotate the cube so that the cubelet occupies
+    position &#39;14&#39; in the diagram above. Then supply
+    colors to the constructor in the order
+    color facing the front,
+    color facing the left.
+
+  If the cubelet is a &#39;middle_side&#39;:
+    There is only one color to supply, so there&#39;s
+    no ambiguity.
+-/
+def solved : cube :=
+ -- TOP
+ -- -- BACK
+ [ cubelet.corner color.red color.green color.white     -- 0
+ , cubelet.side color.green color.white                 -- 1
+ , cubelet.corner color.green color.orange color.white  -- 2
+ -- -- MIDDLE
+ , cubelet.side color.red color.white                   -- 3
+ , cubelet.center color.white                           -- 4
+ , cubelet.side color.orange color.white                -- 5
+ -- -- FRONT
+ , cubelet.corner color.blue color.red color.white      -- 6
+ , cubelet.side color.blue color.white                  -- 7
+ , cubelet.corner color.orange color.blue color.white   -- 8
+ -- MIDDLE LAYER
+ -- -- BACK
+ , cubelet.middle_corner color.red color.green          -- 9
+ , cubelet.middle_side color.green                      -- 10
+ , cubelet.middle_corner color.green color.orange       -- 11
+ -- -- MIDDLE
+ , cubelet.middle_side color.red                        -- 12
+ , cubelet.middle_side color.orange                     -- 13
+ -- -- FRONT
+ , cubelet.middle_corner color.blue color.red           -- 14
+ , cubelet.middle_side color.blue                       -- 15
+ , cubelet.middle_corner color.orange color.blue        -- 16
+ -- BOTTOM LAYER
+ -- -- BACK
+ , cubelet.corner color.blue color.orange color.yellow  -- 17
+ , cubelet.side color.orange color.yellow               -- 18
+ , cubelet.corner color.orange color.green color.yellow -- 19
+ -- -- MIDDLE
+ , cubelet.side color.blue color.yellow                 -- 20
+ , cubelet.center color.yellow                          -- 21
+ , cubelet.side color.green color.yellow                -- 22
+ -- -- FRONT
+ , cubelet.corner color.red color.blue color.yellow     -- 23
+ , cubelet.side color.red color.yellow                  -- 24
+ , cubelet.corner color.green color.red color.yellow    -- 25
+ ]
+
+end old_representation
+
+/-
+PART 2
+======
+-/
+
+/-
+This function takes three inputs `x`, `y` and `z` then contructs the matrix
+                                 │x│
+                                 │y│
+                                 │z│
+-/
+def to_3x1_matrix (x y z : ℤ) : matrix (fin 3) (fin 1) ℤ := λ i, λ j,
+  [x,y,z].nth_le i.val (by apply fin.is_lt)
+
+
+/-
+These are the six colors we&#39;ll use, one for each face of the solved cube:
+- W is White.
+- R is Red.
+- B is Blue.
+- O is Orange.
+- G is Green.
+- Y is Yellow.
+-/
+inductive color : Type | W | R | B | O | G | Y
+
+open color
+
+/- 
+Having a way to print colors will help us later! 
+-/
+instance : has_repr color := { repr := λ c, 
+  match c with 
+  | W := &quot;W&quot; | R := &quot;R&quot; | B := &quot;B&quot; | O := &quot;O&quot; | G := &quot;G&quot; | Y := &quot;Y&quot;
+  end }
+
+/-
+A cube can be thought of as a function from vectors ℤ³ to colored
+stickers. 
+
+          Z
+          ↑           Y
+          |          /
+          |         /
+          |        /
+          |       /
+         S|  S   S
+      S   S   S  S
+   S   S   S  S
+  S  S  S  S     S
+              S−−−−−−−−−−→ X
+  S  S  S  S     S
+              S                
+  S  S  S  S
+
+As we can see,
+- there is a square of 9 stickers normal to the x-axis, and facing
+the direction of the positive x-axis.
+- there is a square of 9 stickers normal to the x-axis, and facing
+the direction of the negative x-axis (not pictured).
+- there is a square of 9 stickers normal to the y-axis, and facing
+the direction of the positive y-axis (not pictured).
+- there is a square of 9 stickers normal to the y-axis, and facing
+the direction of the negative y-axis.
+- there is a square of 9 stickers normal to the z-axis, and facing
+the direction of the positive z-axis.
+- there is a square of 9 stickers normal to the z-axis, and facing
+the direction of the negative z-axis (not pictured).
+
+Now we need to understand how vectors are assigned to stickers.
+
+Consider the square of 9 stickers normal to the x-axis, facing the
+direction of the positive x-axis. All stickers on this square are
+assigned vectors with x coordinate equal to 2. Their y and z
+coordinates will be in the set {-1, 0, +1}, based on their relative
+positions. Look at the definition of the solved cube for an example.
+
+Any vector in ℤ³ that is not assigned to a sticker location maps
+to `none`.
+-/
+def cube : Type := matrix (fin 3) (fin 1) ℤ → option color
+
+/-
+THE NET OF THE SOLVED CUBE      A &#39;DRAWING&#39; OF THE SOLVED CUBE
+
+                                         Z                  
+      W W W                              ↑           Y
+      W W W                              |          /
+      W W W                              |         /
+R R R B B B O O O G G G                  |        /
+R R R B B B O O O G G G                  |       /
+R R R B B B O O O G G G                 W|  W   W
+      Y Y Y                          W   W   W  B
+      Y Y Y                       W   W   W  B
+      Y Y Y                      R  R  R  B     B
+                                             B−−−−−−−−−−→ X
+                                 R  R  R  B     B
+                                             B
+                                 R  R  R  B
+-/
+def solved_cube : cube := λ coords,
+  match (coords 0 0, coords 1 0, coords 2 0) with
+  | ( 2, y, z) := if (abs y &lt; 2) &amp;&amp; (abs z &lt; 2) then some B else none
+  | (-2, y, z) := if (abs y &lt; 2) &amp;&amp; (abs z &lt; 2) then some G else none
+  | ( x, 2, z) := if (abs x &lt; 2) &amp;&amp; (abs z &lt; 2) then some O else none
+  | ( x,-2, z) := if (abs x &lt; 2) &amp;&amp; (abs z &lt; 2) then some R else none
+  | ( x, y, 2) := if (abs x &lt; 2) &amp;&amp; (abs y &lt; 2) then some W else none
+  | ( x, y,-2) := if (abs x &lt; 2) &amp;&amp; (abs y &lt; 2) then some Y else none
+  | _          := none
+  end
+
+/- 
+Convert the cube into an ASCII art representation, like the ones in the comments
+but with the x, y and z axis lines removed.
+-/
+instance : has_repr cube := { repr := λ c,
+&quot;       &quot;      ++ (repr (option.get_or_else (c $ to_3x1_matrix (-1)   1    2 ) W)) ++ 
+&quot;   &quot;          ++ (repr (option.get_or_else (c $ to_3x1_matrix   0    1    2 ) W)) ++ 
+&quot;   &quot;          ++ (repr (option.get_or_else (c $ to_3x1_matrix   1    1    2 ) W)) ++ &quot;\n&quot;     ++
+&quot;    &quot;         ++ (repr (option.get_or_else (c $ to_3x1_matrix (-1)   0    2 ) W)) ++ 
+&quot;   &quot;          ++ (repr (option.get_or_else (c $ to_3x1_matrix   0    0    2 ) W)) ++ 
+&quot;   &quot;          ++ (repr (option.get_or_else (c $ to_3x1_matrix   1    0    2 ) W)) ++ 
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   2    1    1 ) W)) ++ &quot; \n&quot;    ++
+&quot; &quot;            ++ (repr (option.get_or_else (c $ to_3x1_matrix (-1) (-1)   2 ) W)) ++ 
+&quot;   &quot;          ++ (repr (option.get_or_else (c $ to_3x1_matrix   0  (-1)   2 ) W)) ++ 
+&quot;   &quot;          ++ (repr (option.get_or_else (c $ to_3x1_matrix   1  (-1)   2 ) W)) ++ 
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   2    0    1 ) W)) ++ &quot;    \n&quot; ++
+&quot;&quot;             ++ (repr (option.get_or_else (c $ to_3x1_matrix (-1) (-2)   1 ) W)) ++ 
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   0  (-2)   1 ) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   1  (-2)   1 ) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   2  (-1)   1 ) W)) ++
+&quot;     &quot;        ++ (repr (option.get_or_else (c $ to_3x1_matrix   2    1    0 ) W)) ++ &quot; \n&quot;    ++
+&quot;            &quot; ++ (repr (option.get_or_else (c $ to_3x1_matrix   2    0    0 ) W)) ++ &quot;    \n&quot; ++   
+&quot;&quot;             ++ (repr (option.get_or_else (c $ to_3x1_matrix (-1) (-2)   0 ) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   0  (-2)   0 ) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   1  (-2)   0 ) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   2  (-1)   0 ) W)) ++
+&quot;     &quot;        ++ (repr (option.get_or_else (c $ to_3x1_matrix   2    1  (-1)) W)) ++ &quot; \n&quot;    ++
+&quot;            &quot; ++ (repr (option.get_or_else (c $ to_3x1_matrix   2    0  (-1)) W)) ++ &quot;    \n&quot; ++
+&quot;&quot;             ++ (repr (option.get_or_else (c $ to_3x1_matrix (-1) (-2) (-1)) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   0  (-2) (-1)) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   1  (-2) (-1)) W)) ++
+&quot;  &quot;           ++ (repr (option.get_or_else (c $ to_3x1_matrix   2  (-1) (-1)) W)) ++ &quot;       \n&quot;
+  }
+
+/-
+This is the representation of the 3×3 matrix
+                               │ 0 1 0│
+                               │-1 0 0│
+                               │ 0 0 1│
+When it is multiplied by the column vector
+                                 │x│
+                                 │y│
+                                 │z│
+it performs an anticlockwise rotation about the z-axis
+i.e. it can be seen as &#39;anticlockwise&#39; if you&#39;re facing
+the same direction as the positive z-axis.
+-/
+def z&#39;_rotation_matrix : matrix (fin 3) (fin 3) ℤ := λ i, λ j,
+  match i.val with
+  | 0 := [ 0, 1, 0].nth_le j.val (by apply fin.is_lt)
+  | 1 := [-1, 0, 0].nth_le j.val (by apply fin.is_lt)
+  | 2 := [ 0, 0, 1].nth_le j.val (by apply fin.is_lt)
+  | _ := 0
+  end
+
+/-
+This function rotates the cube as a whole clockwise about the
+z-axis. i.e. it can be seen as &#39;clockwise&#39; if you&#39;re facing
+the same direction as the positive z-axis.
+
+Here&#39;s a visual representation of the rotation:
+         Z                                   Z
+         ↑           Y                       ↑           Y
+         |          /                        |          /
+         |         /                         |         /
+         |        /                          |        /
+         |       /                           |       /
+        W|  W   W                           W|  W   W
+     W   W   W  B                        W   W   W  R
+  W   W   W  B                        W   W   W  R
+ R  R  R  B     B                    G  G  G  R     R
+             B−−−−−−−−−−→ X   to                 R−−−−−−−−−−→ X  
+ R  R  R  B     B                    G  G  G  R     R
+             B                                   R
+ R  R  R  B                          G  G  G  R
+
+A technical detail- since the cube is a function from vectors in
+ℤ³ to colors, we can&#39;t actually rotate it. Instead, when a vector
+representing a sticker position is provided to the result of
+applying `z_rotate`, the reverse rotation (i.e. anticlockwise z rotation)
+is applied to the vector through `z&#39;_rotation_matrix` and this
+reverse-rotated vector is fed to the cube.
+-/
+def z_rotate : cube → cube := λ c, λ coords, 
+  c (matrix.mul z&#39;_rotation_matrix coords)
+
+/-
+This is the representation of the 3×3 matrix
+                               │ 0 0 1│
+                               │ 0 1 0│
+                               │-1 0 0│
+When it is multiplied by the column vector
+                                 │x│
+                                 │y│
+                                 │z│
+it performs a clockwise rotation about the y-axis
+i.e. it can be seen as &#39;clockwise&#39; if you&#39;re facing
+the same direction as the positive y-axis.
+-/
+def y&#39;_rotation_matrix : matrix (fin 3) (fin 3) ℤ := λ i, λ j,
+  match i.val with
+  | 0 := [ 0, 0, 1].nth_le j.val (by apply fin.is_lt)
+  | 1 := [ 0, 1, 0].nth_le j.val (by apply fin.is_lt)
+  | 2 := [-1, 0, 0].nth_le j.val (by apply fin.is_lt)
+  | _ := 0
+  end
+
+/-
+This function rotates the cube as a whole anticlockwise about
+the y-axis. i.e. it can be seen as &#39;anticlockwise&#39; if you&#39;re
+facing the same direction as the positive y-axis.
+
+Here&#39;s a visual representation of the rotation:
+         Z                                   Z
+         ↑           Y                       ↑           Y
+         |          /                        |          /
+         |         /                         |         /
+         |        /                          |        /
+         |       /                           |       /
+        W|  W   W                           B|  B   B
+     W   W   W  B                        B   B   B  Y
+  W   W   W  B                        B   B   B  Y
+ R  R  R  B     B                    R  R  R  Y     Y
+             B−−−−−−−−−−→ X   to                 Y−−−−−−−−−−→ X  
+ R  R  R  B     B                    R  R  R  Y     Y
+             B                                   Y
+ R  R  R  B                          R  R  R  Y
+
+A technical detail- look at the note for `z_rotate` to see what&#39;s
+actually happening in this function.
+-/
+def y_rotate : cube → cube := λ c, λ coords, 
+  c (matrix.mul y&#39;_rotation_matrix coords)
+
+/-
+Look at the comment for `x_face_turn` to learn what this function
+does.
+-/
+def x_face_turning_transformation : 
+  matrix (fin 3) (fin 1) ℤ → matrix (fin 3) (fin 1) ℤ := λ v,
+  match (v 0 0, v 1 0, v 2 0) with
+  | ( 2, y, z) := to_3x1_matrix 2 (-z)   y
+  | ( 1, 2, z) := to_3x1_matrix 1 (-z)   2
+  | ( 1,-2, z) := to_3x1_matrix 1 (-z) (-2)
+  | ( 1, y, 2) := to_3x1_matrix 1 (-2)   y
+  | ( 1, y,-2) := to_3x1_matrix 1   2    y
+  | _          := v
+  end
+
+/-
+This function turns the face normal to the x-axis and facing
+the direction of the positive x-axis, in the way a layer of
+a Rubik&#39;s cube can be turned.
+
+Below is a visual representation of the transformation.
+The stickers represented by stars are unchanged by the transformation.
+The stickers that are affected by the transformation but aren&#39;t visible
+from the angle of drawing are placed in parentheses.
+
+         Z                                   Z
+         ↑           Y                       ↑           Y
+         |          /                        |          /
+         |         /                         |         /
+         |        /                          |        /
+         |       /                           |       /
+        *|  *   l                           *|  *   u
+     *   *   k  c (m)                   *   *    t  a (j)
+  *   *   j  b                        *   *   s  h
+ *  *  u  a     d (n)                *  *  r  g     b (k)
+             i−−−−−−−−−−→ X   to                 i−−−−−−−−−−→ X  
+ *  *  t  h     e (o)                *  *  q  f     c (l)
+             f (p)                               d (m)
+ *  *  s  g (q)                      *  *  p  e (n)
+         (r)                                 (o)    
+
+A technical detail- since the cube is a function from vectors in
+ℤ³ to colors, we can&#39;t actually turn its front face. Instead, when a vector
+representing a sticker position is provided to the result of
+applying `x_face_turn`, the reverse transformation
+is applied to the vector through `x_face_turning_transformation` and this
+reverse-turned vector is fed to the cube.
+-/
+def x_face_turn : cube → cube := λ c, λ coords, 
+  c (x_face_turning_transformation coords)
+
+/-
+NOTE: The three functions `z_rotate`, `y_rotate` and `x_face_turn` can be
+used to encode every move we can make on a Rubik&#39;s cube. I can&#39;t prove this
+though, it&#39;s easiest to visually verify that any of the 6 faces of the cube
+can be made to face the positive x-direction and then we can perform an
+x_face_turn on that face.
+-/
+
+/-
+You can use the eval statements below to see the transformations in action
+and verify that they work:
+-/
+
+#eval solved_cube
+
+#eval z_rotate solved_cube
+
+#eval z_rotate ∘ z_rotate $ solved_cube
+
+#eval z_rotate ∘ z_rotate ∘ z_rotate $ solved_cube
+
+#eval z_rotate ∘ z_rotate ∘ z_rotate ∘ z_rotate $ solved_cube
+
+#eval y_rotate solved_cube
+
+#eval y_rotate ∘ y_rotate ∘ y_rotate $ solved_cube
+
+#eval x_face_turn $ solved_cube
+
+#eval z_rotate ∘ x_face_turn $ solved_cube
+
+#eval z_rotate ∘ z_rotate ∘ x_face_turn $ solved_cube
+
+#eval z_rotate ∘ z_rotate ∘ z_rotate ∘ x_face_turn $ solved_cube
+
+#eval z_rotate ∘ z_rotate ∘ z_rotate ∘ x_face_turn $ solved_cube
+
+#eval y_rotate ∘ x_face_turn $ solved_cube
+
+#eval y_rotate ∘ y_rotate ∘ x_face_turn $ solved_cube
+
+#eval y_rotate ∘ y_rotate ∘ y_rotate ∘ x_face_turn $ solved_cube</code></pre>
+</body>
+</html>
